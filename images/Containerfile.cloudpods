@@ -1,0 +1,28 @@
+FROM ghcr.io/yinjiayi/cloudpods-host-deployer-base:1.5.9-riscv64.1
+
+ARG SOURCE_COMMIT
+ARG VERSION
+LABEL org.opencontainers.image.source="https://github.com/yinjiayi/cloudpods" \
+      org.opencontainers.image.revision="${SOURCE_COMMIT}" \
+      org.opencontainers.image.version="${VERSION}"
+
+ENV TZ=UTC \
+    ETCD_UNSUPPORTED_ARCH=riscv64
+
+RUN apk update && \
+    apk add --no-cache \
+      bash bind-tools busybox-extras coreutils dmidecode dropbear e2fsprogs etcd etcd-ctl ethtool \
+      ipmitool iproute2 iptables kmod lsof openvswitch openssh-client-default \
+      openssl pciutils pv qemu-img rsync shadow sshpass strace sudo tar tcpdump \
+      tzdata util-linux && \
+    install -d /opt/yunion/bin /usr/libexec /usr/local/bin /usr/local/qemu-10.0.3/bin && \
+    ln -sf /usr/bin/etcd /usr/local/bin/etcd && \
+    ln -sf /usr/bin/etcdctl /usr/local/bin/etcdctl && \
+    ln -sf /usr/bin/qemu-system-riscv64 /usr/local/qemu-10.0.3/bin/qemu-system-riscv64 && \
+    ln -sf /usr/bin/qemu-system-riscv64 /usr/libexec/qemu-kvm && \
+    rm -rf /var/cache/apk/*
+
+COPY rootfs/ /
+
+RUN chmod 0755 /opt/yunion/bin/* /usr/bin/kubectl && \
+    ln -sf /opt/yunion/bin/climc /usr/local/bin/climc

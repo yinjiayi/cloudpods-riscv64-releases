@@ -1,0 +1,12 @@
+FROM ghcr.io/yinjiayi/cloudpods-web-base:v4.0.3-riscv64.1
+
+ARG SOURCE_COMMIT
+ARG VERSION
+LABEL org.opencontainers.image.source="https://github.com/yinjiayi/dashboard" \
+      org.opencontainers.image.revision="${SOURCE_COMMIT}" \
+      org.opencontainers.image.version="${VERSION}"
+
+COPY dist/ /usr/share/nginx/html/web/
+
+RUN test -f /usr/share/nginx/html/web/index.html && \
+    grep -R -q riscv64 /usr/share/nginx/html/web/js

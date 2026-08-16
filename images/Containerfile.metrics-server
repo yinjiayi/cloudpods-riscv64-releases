@@ -1,0 +1,15 @@
+FROM ghcr.io/yinjiayi/k3s-golang:1.23-alpine3.20-riscv64.1 AS build
+
+ARG SOURCE_REF=v0.7.2
+ARG SOURCE_COMMIT
+RUN apk add --no-cache bash build-base git
+RUN git clone --depth 1 --branch "${SOURCE_REF}" https://github.com/kubernetes-sigs/metrics-server.git /src
+WORKDIR /src
+RUN test "$(git rev-parse HEAD)" = "${SOURCE_COMMIT}"
+RUN go mod download
+RUN ARCH=riscv64 make metrics-server
+
+FROM ghcr.io/yinjiayi/k3s-distroless-static:unstable-riscv64.1
+COPY --from=build /src/metrics-server /metrics-server
+USER 65534
+ENTRYPOINT ["/metrics-server"]

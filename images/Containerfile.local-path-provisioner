@@ -1,0 +1,14 @@
+FROM ghcr.io/yinjiayi/k3s-golang:1.23-alpine3.20-riscv64.1 AS build
+
+ARG SOURCE_REF=v0.0.29
+ARG SOURCE_COMMIT
+RUN apk add --no-cache git
+RUN git clone --depth 1 --branch "${SOURCE_REF}" https://github.com/rancher/local-path-provisioner.git /src
+WORKDIR /src
+RUN test "$(git rev-parse HEAD)" = "${SOURCE_COMMIT}"
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=riscv64 \
+    go build -trimpath -ldflags='-s -w' -o /out/local-path-provisioner .
+
+FROM ghcr.io/yinjiayi/k3s-alpine:3.20-riscv64.1
+COPY --from=build /out/local-path-provisioner /usr/bin/local-path-provisioner
+ENTRYPOINT ["/usr/bin/local-path-provisioner"]

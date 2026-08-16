@@ -1,0 +1,12 @@
+ghcr.io/yinjiayi/k3s-klipper-helm:v0.9.3-build20241008-riscv64.1
+ghcr.io/yinjiayi/k3s-klipper-lb:v0.4.9-riscv64.1
+ghcr.io/yinjiayi/k3s-local-path-provisioner:v0.0.29-riscv64.1
+ghcr.io/yinjiayi/k3s-coredns:1.11.1-riscv64.1
+ghcr.io/yinjiayi/k3s-busybox:1.36.1-riscv64.1
+ghcr.io/yinjiayi/k3s-traefik:2.10.5-riscv64.1
+ghcr.io/yinjiayi/k3s-metrics-server:v0.7.2-riscv64.1
+ghcr.io/yinjiayi/k3s-pause:3.10-riscv64.1
+ghcr.io/yinjiayi/k3s-alpine:3.20-riscv64.1
+ghcr.io/yinjiayi/k3s-golang:1.23-alpine3.20-riscv64.1
+ghcr.io/yinjiayi/k3s-distroless-static:unstable-riscv64.1
+ghcr.io/yinjiayi/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1

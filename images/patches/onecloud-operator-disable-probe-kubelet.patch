@@ -1,0 +1,22 @@
+diff --git a/pkg/apis/onecloud/v1alpha1/types.go b/pkg/apis/onecloud/v1alpha1/types.go
+--- a/pkg/apis/onecloud/v1alpha1/types.go
++++ b/pkg/apis/onecloud/v1alpha1/types.go
+@@ -1027,6 +1027,7 @@ type HostAgentSpec struct {
+ 	ManageNtpConfiguration bool   `json:"manageNtpConfiguration"`
+ 	HostCpuPassthrough     *bool  `json:"hostCpuPassthrough"`
+ 	DefaultQemuVersion     string `json:"defaultQemuVersion"`
++	DisableProbeKubelet    bool   `json:"disableProbeKubelet"`
+ 
+ 	MaxUnavailableCount int `json:"maxUnavailableCount"`
+ }
+diff --git a/pkg/manager/component/host.go b/pkg/manager/component/host.go
+--- a/pkg/manager/component/host.go
++++ b/pkg/manager/component/host.go
+@@ -264,4 +264,7 @@ func (m *hostManager) newHostPrivilegedDaemonSet(
+ 			},
+ 		}
++		if dsSpec.DisableProbeKubelet {
++			containers[0].Command = append(containers[0].Command, "--disable-probe-kubelet")
++		}
+ 		return containers
+ 	}

@@ -1,0 +1,11 @@
+FROM ghcr.io/yinjiayi/cloudpods-onecloud-base:v3.22.2-0-riscv64.1
+
+ARG SOURCE_COMMIT
+ARG VERSION
+LABEL org.opencontainers.image.source="https://github.com/yunionio/onecloud-operator" \
+      org.opencontainers.image.revision="${SOURCE_COMMIT}" \
+      org.opencontainers.image.version="${VERSION}"
+
+COPY rootfs/bin/onecloud-controller-manager /bin/onecloud-controller-manager
+
+RUN chmod 0755 /bin/onecloud-controller-manager

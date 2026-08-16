@@ -1,0 +1,52 @@
+name: Build K3s RISC-V images
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'images-riscv64-*'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  cross-build-base:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Mirror pinned amd64 K3s build base to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io \
+            --username "${GITHUB_ACTOR}" --password-stdin
+          source_image=docker.io/library/golang@sha256:7cc3189dae5bcd44531e89cc958eec136e6a2f3aa6d5fc84c61b73fa25727c13
+          target_image=ghcr.io/yinjiayi/k3s-golang-cross:1.20.12-alpine3.18-amd64.1
+          docker pull --platform linux/amd64 "${source_image}"
+          test "$(docker image inspect --format '{{.Architecture}}' "${source_image}")" = amd64
+          docker tag "${source_image}" "${target_image}"
+          docker push "${target_image}"
+
+  build:
+    needs: cross-build-base
+    runs-on: [self-hosted, linux, riscv64, openeuler-24.03-riscv64]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and push images
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./images/build-k3s-images.sh
+
+      - name: Upload digest lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: k3s-images-riscv64-digests
+          if-no-files-found: error
+          path: |
+            dist/k3s-images-riscv64.digests
+            dist/k3s-images-riscv64.digests.sha256

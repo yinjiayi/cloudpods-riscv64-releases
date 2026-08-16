@@ -1,0 +1,14 @@
+FROM ghcr.io/yinjiayi/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1 AS build
+
+ARG SOURCE_REF=v2.10.5
+ARG SOURCE_COMMIT
+RUN git clone --depth 1 --branch "${SOURCE_REF}" https://github.com/traefik/traefik.git /src
+WORKDIR /src
+RUN test "$(git rev-parse HEAD)" = "${SOURCE_COMMIT}"
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=riscv64 GOFLAGS=-buildvcs=false \
+    go build -trimpath -ldflags='-s -w' -o /out/traefik ./cmd/traefik
+
+FROM scratch
+COPY --from=build /out/traefik /traefik
+EXPOSE 80 443 8080
+ENTRYPOINT ["/traefik"]

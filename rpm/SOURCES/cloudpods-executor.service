@@ -1,0 +1,14 @@
+[Unit]
+Description=Cloudpods privileged command executor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/install -d -m 0755 /var/run/onecloud
+ExecStart=/usr/local/libexec/cloudpods/executor-server --socket-path /var/run/onecloud/exec.sock
+Restart=always
+RestartSec=2s
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+FROM ghcr.io/yinjiayi/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1 AS build
+
+ARG SOURCE_REF=v1.11.1
+ARG SOURCE_COMMIT
+RUN git clone --depth 1 --branch "${SOURCE_REF}" https://github.com/coredns/coredns.git /src
+WORKDIR /src
+RUN test "$(git rev-parse HEAD)" = "${SOURCE_COMMIT}"
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=riscv64 GOFLAGS=-buildvcs=false \
+    go build -trimpath -ldflags='-s -w' -o /out/coredns .
+
+FROM scratch
+COPY --from=build /out/coredns /coredns
+EXPOSE 53 53/udp
+ENTRYPOINT ["/coredns"]

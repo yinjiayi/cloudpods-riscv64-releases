@@ -1,0 +1,54 @@
+FROM ghcr.io/yinjiayi/k3s-alpine:3.20-riscv64.1 AS source
+ARG SOURCE_COMMIT
+RUN apk add --no-cache git && \
+    git init /src && \
+    git -C /src remote add origin https://github.com/k3s-io/klipper-helm.git && \
+    git -C /src fetch --depth 1 origin "${SOURCE_COMMIT}" && \
+    git -C /src checkout --detach FETCH_HEAD && \
+    test "$(git -C /src rev-parse HEAD)" = "${SOURCE_COMMIT}"
+
+FROM ghcr.io/yinjiayi/k3s-alpine:3.20-riscv64.1 AS extract
+ARG HELM_VERSION=v3.16.1
+ARG HELM_RISCV64_SHA256
+RUN apk add --no-cache curl ca-certificates
+RUN curl --fail --location \
+      "https://get.helm.sh/helm-${HELM_VERSION}-linux-riscv64.tar.gz" \
+      --output /tmp/helm.tar.gz && \
+    echo "${HELM_RISCV64_SHA256}  /tmp/helm.tar.gz" | sha256sum --check && \
+    tar xvzf /tmp/helm.tar.gz --strip-components=1 -C /usr/bin
+COPY --from=source /src/entry /usr/bin/entry
+
+FROM ghcr.io/yinjiayi/k3s-golang:1.23-alpine3.20-riscv64.1 AS plugins
+ARG HELM_SET_STATUS_COMMIT
+ARG HELM_MAPKUBEAPIS_COMMIT
+RUN apk add --no-cache curl ca-certificates build-base git
+COPY --from=extract /usr/bin/helm /usr/bin/helm
+RUN git clone https://github.com/k3s-io/helm-set-status.git \
+      /go/src/github.com/k3s-io/helm-set-status && \
+    git -C /go/src/github.com/k3s-io/helm-set-status checkout --detach \
+      "${HELM_SET_STATUS_COMMIT}" && \
+    make -C /go/src/github.com/k3s-io/helm-set-status install
+RUN git clone https://github.com/helm/helm-mapkubeapis.git \
+      /go/src/github.com/helm/helm-mapkubeapis && \
+    git -C /go/src/github.com/helm/helm-mapkubeapis checkout --detach \
+      "${HELM_MAPKUBEAPIS_COMMIT}" && \
+    make -C /go/src/github.com/helm/helm-mapkubeapis && \
+    mkdir -p /root/.local/share/helm/plugins/helm-mapkubeapis && \
+    cp -r /go/src/github.com/helm/helm-mapkubeapis/plugin.yaml \
+      /go/src/github.com/helm/helm-mapkubeapis/bin \
+      /go/src/github.com/helm/helm-mapkubeapis/config \
+      /root/.local/share/helm/plugins/helm-mapkubeapis/
+
+FROM ghcr.io/yinjiayi/k3s-alpine:3.20-riscv64.1
+ARG BUILDDATE
+LABEL org.opencontainers.image.created=$BUILDDATE
+RUN apk add --no-cache ca-certificates jq bash && \
+    adduser -D -u 1000 -s /bin/bash klipper-helm
+WORKDIR /home/klipper-helm
+COPY --chown=1000:1000 --from=plugins /root/.local/share/helm/plugins/ /home/klipper-helm/.local/share/helm/plugins/
+COPY --from=extract /usr/bin/helm /usr/bin/entry /usr/bin/
+RUN chmod 0755 /usr/bin/helm /usr/bin/entry
+ENTRYPOINT ["entry"]
+ENV STABLE_REPO_URL=https://charts.helm.sh/stable/
+ENV TIMEOUT=
+USER 1000

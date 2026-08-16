@@ -1,0 +1,51 @@
+#!/usr/bin/bash
+set -e
+
+REAL_QEMU=/usr/local/qemu-10.0.7/bin/qemu-system-riscv64.real
+acpi_was_set=false
+metadata_only=false
+previous_arg=
+qemu_args=()
+vhost_net_available=false
+
+if test -c /dev/vhost-net; then
+    vhost_net_available=true
+fi
+
+for arg in "$@"; do
+    # Cloudpods enables vhost for every virtio tap NIC when KVM is available.
+    # Some RISC-V vendor kernels provide KVM and TUN but omit CONFIG_VHOST_NET.
+    # In that case QEMU exits instead of falling back, so make the fallback
+    # explicit while preserving vhost acceleration on capable hosts.
+    if ! ${vhost_net_available} \
+        && [[ "${arg}" == *type=tap* ]] \
+        && [[ "${arg}" == *vhost=on* ]]; then
+        arg="${arg//vhost=on/vhost=off}"
+    fi
+
+    qemu_args+=("${arg}")
+
+    case "${arg}" in
+        *acpi=*|-no-acpi)
+            acpi_was_set=true
+            ;;
+        --version|-version|--help|-help|-h)
+            metadata_only=true
+            ;;
+    esac
+
+    if { test "${previous_arg}" = "-machine" || test "${previous_arg}" = "-M"; } \
+        && { test "${arg}" = "help" || test "${arg}" = "?"; }; then
+        metadata_only=true
+    fi
+    previous_arg="${arg}"
+done
+
+if ${acpi_was_set} || ${metadata_only}; then
+    exec -a "$0" "${REAL_QEMU}" "${qemu_args[@]}"
+fi
+
+# The official openEuler RISC-V VM startup script uses acpi=off.  Keep that
+# stable default for Cloudpods, while allowing an explicit caller setting to
+# override it.
+exec -a "$0" "${REAL_QEMU}" "${qemu_args[@]}" -machine acpi=off

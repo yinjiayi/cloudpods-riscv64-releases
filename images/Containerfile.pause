@@ -1,0 +1,13 @@
+FROM ghcr.io/yinjiayi/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1 AS build
+
+ARG KUBERNETES_REF=948afe5ca072329a73c8e79ed5938717a5cb3d21
+ARG PAUSE_VERSION=3.10
+RUN curl --fail --location \
+    "https://raw.githubusercontent.com/kubernetes/kubernetes/${KUBERNETES_REF}/build/pause/linux/pause.c" \
+    --output /pause.c
+RUN gcc -Os -Wall -Werror -static -DVERSION=v${PAUSE_VERSION} -o /pause /pause.c
+
+FROM scratch
+COPY --from=build /pause /pause
+USER 65535:65535
+ENTRYPOINT ["/pause"]

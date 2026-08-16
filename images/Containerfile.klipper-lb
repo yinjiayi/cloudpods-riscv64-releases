@@ -1,0 +1,16 @@
+FROM ghcr.io/yinjiayi/k3s-alpine:3.20-riscv64.1 AS source
+ARG SOURCE_COMMIT
+RUN apk add --no-cache git && \
+    git init /src && \
+    git -C /src remote add origin https://github.com/k3s-io/klipper-lb.git && \
+    git -C /src fetch --depth 1 origin "${SOURCE_COMMIT}" && \
+    git -C /src checkout --detach FETCH_HEAD && \
+    test "$(git -C /src rev-parse HEAD)" = "${SOURCE_COMMIT}"
+
+FROM ghcr.io/yinjiayi/k3s-alpine:3.20-riscv64.1
+ARG BUILDDATE
+LABEL org.opencontainers.image.created=$BUILDDATE
+RUN apk add --no-cache iptables ip6tables nftables iptables-legacy
+COPY --from=source /src/entry /usr/bin/entry
+RUN chmod 0755 /usr/bin/entry
+CMD ["entry"]

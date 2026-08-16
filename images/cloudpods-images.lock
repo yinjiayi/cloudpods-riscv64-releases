@@ -1,0 +1,14 @@
+ghcr.io/yinjiayi/cloudpods:v4.0.3-riscv64.3
+ghcr.io/yinjiayi/onecloud-operator:v4.0.3-riscv64.2
+ghcr.io/yinjiayi/web:v4.0.3-riscv64-ui2
+ghcr.io/yinjiayi/etcd:3.5.24-riscv64.1
+ghcr.io/yinjiayi/host-image:v1.0.8-riscv64.1
+ghcr.io/yinjiayi/host-health:v0.0.4-riscv64.1
+ghcr.io/yinjiayi/guacd:1.6.0-riscv64.1
+ghcr.io/yinjiayi/openvswitch:2.12.4-20260415-riscv64.1
+ghcr.io/yinjiayi/busybox:1.35.0-riscv64.1
+ghcr.io/yinjiayi/victoria-metrics:v1.129.1-1-riscv64.1
+ghcr.io/yinjiayi/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1
+ghcr.io/yinjiayi/cloudpods-onecloud-base:v3.22.2-0-riscv64.1
+ghcr.io/yinjiayi/cloudpods-host-deployer-base:1.5.9-riscv64.1
+ghcr.io/yinjiayi/cloudpods-web-base:v4.0.3-riscv64.1

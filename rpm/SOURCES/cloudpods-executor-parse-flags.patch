@@ -1,0 +1,11 @@
+diff --git a/cmd/executor-server/main.go b/cmd/executor-server/main.go
+--- a/cmd/executor-server/main.go
++++ b/cmd/executor-server/main.go
+@@ -40,6 +40,7 @@ func init() {
+ }
+ 
+ func main() {
++	flag.Parse()
+ 	if !sysutils.IsRootPermission() {
+ 		log.Fatalln("executor must run on root permission")
+ 	}

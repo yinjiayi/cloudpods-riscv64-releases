@@ -1,0 +1,70 @@
+name: Build and publish Cloudpods RISC-V images
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'cloudpods-images-riscv64-*'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  web-assets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build dashboard from the pinned source
+        run: |
+          source versions.env
+          git clone --depth 1 --branch "${DASHBOARD_SOURCE_REF}" \
+            https://github.com/yinjiayi/dashboard.git build-input/dashboard
+          test "$(git -C build-input/dashboard rev-parse HEAD)" = \
+            "${DASHBOARD_SOURCE_COMMIT}"
+          cd build-input/dashboard
+          npm ci --legacy-peer-deps --no-audit --no-fund
+          npm run test:unit -- tests/unit/compute-arch.spec.js --runInBand
+          npm run build
+          grep -R -q riscv64 dist/js
+
+      - name: Upload dashboard assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-riscv64-dist
+          if-no-files-found: error
+          path: build-input/dashboard/dist
+
+  publish:
+    needs: web-assets
+    runs-on: [self-hosted, linux, riscv64, openeuler-24.03-riscv64]
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download dashboard assets
+        uses: actions/download-artifact@v4
+        with:
+          name: dashboard-riscv64-dist
+          path: build-input/dashboard-dist
+
+      - name: Build Cloudpods images from pinned source and publish them
+        env:
+          DASHBOARD_DIST_DIR: ${{ github.workspace }}/build-input/dashboard-dist
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./images/build-cloudpods-images.sh
+
+      - name: Upload digest lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudpods-images-riscv64-digests
+          if-no-files-found: error
+          path: |
+            dist/cloudpods-images-riscv64.digests
+            dist/cloudpods-images-riscv64.digests.sha256
