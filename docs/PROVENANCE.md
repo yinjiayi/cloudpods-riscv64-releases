@@ -15,12 +15,16 @@ checked against SHA-256 digests before a release is published.
 | klipper-helm | upstream source plus `k3s-io/klipper-helm` PR 64, commit `8a71d64` |
 | klipper-lb | upstream source plus `k3s-io/klipper-lb` PR 56, commit `faaeca6` |
 | QEMU | signed `download.qemu.org` source `10.0.7` |
+| GitHub Actions Runner | official `actions/runner` x64 release `2.336.0`, SHA-256 pinned |
+| Runner sysroot | signed Canonical Ubuntu 22.04 OCI build `20260810`, SHA-256 pinned |
+| Runner ICU | Ubuntu Jammy `libicu70` package `70.1-2`, SHA-256 pinned |
 | Open vSwitch | openEuler 24.03 LTS SP3 SRPM plus the checked-in GCC 14 patch |
 | Cloudpods executor | `yunionio/cloudpods` tag `v4.0.3` plus the checked-in flag parser patch |
 | RISC-V UEFI | openEuler 24.03 LTS SP3 `RISCV_VIRT_*_RVA20.fd`, pinned by SHA-256 |
 
 `versions.env` contains the full source commits, SHA-256 checksums, and QEMU
-release-key fingerprint. The K3s fork additionally pins its generated root
-filesystem checksum in `scripts/version.sh`. Workflows reject an architecture
-other than `riscv64` and publish final RPM/image digest lists as build
-artifacts.
+release-key fingerprint. The Actions Runner bootstrap also verifies the
+Canonical checksum signature against the pinned Ubuntu cloud-image key
+fingerprint. The K3s fork additionally pins its generated root filesystem
+checksum in `scripts/version.sh`. Workflows reject an architecture other than
+`riscv64` and publish final RPM/image digest lists as build artifacts.

@@ -67,15 +67,30 @@ qemu_img=${package_root}${prefix}/bin/qemu-img
 "${real_qemu}" -machine help | grep -Eq '^virt[[:space:]]'
 "${real_qemu}" -accel help | grep -Fxq kvm
 
-smoke_dir=$(mktemp -d "${work_root}/kvm-smoke.XXXXXX")
-"${real_qemu}" \
-    -machine virt,accel=kvm -cpu host -smp 1 -m 128M \
-    -nodefaults -display none -S \
-    -pidfile "${smoke_dir}/qemu.pid" -daemonize
-smoke_pid=$(<"${smoke_dir}/qemu.pid")
-kill -0 "${smoke_pid}"
-kill "${smoke_pid}"
-wait "${smoke_pid}" 2>/dev/null || true
+case ${QEMU_KVM_SMOKE:-require} in
+    require)
+        [[ -c /dev/kvm ]] || {
+            echo 'QEMU KVM smoke test requires /dev/kvm' >&2
+            exit 1
+        }
+        smoke_dir=$(mktemp -d "${work_root}/kvm-smoke.XXXXXX")
+        "${real_qemu}" \
+            -machine virt,accel=kvm -cpu host -smp 1 -m 128M \
+            -nodefaults -display none -S \
+            -pidfile "${smoke_dir}/qemu.pid" -daemonize
+        smoke_pid=$(<"${smoke_dir}/qemu.pid")
+        kill -0 "${smoke_pid}"
+        kill "${smoke_pid}"
+        wait "${smoke_pid}" 2>/dev/null || true
+        ;;
+    skip)
+        echo 'QEMU_KVM_SMOKE=skip: deferring runtime KVM validation to a physical RISC-V host'
+        ;;
+    *)
+        echo 'QEMU_KVM_SMOKE must be require or skip' >&2
+        exit 2
+        ;;
+esac
 
 tar -C "${package_root}" -cJf "${work_root}/${package_archive}" .
 sha256sum "${work_root}/${package_archive}"

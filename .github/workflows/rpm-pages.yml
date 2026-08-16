@@ -1,53 +1,58 @@
-name: Build and publish openEuler RISC-V RPMs
+name: Publish KVM-validated RISC-V RPMs to Pages
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - 'rpm-riscv64-*'
+    inputs:
+      build_run_id:
+        description: Workflow run ID from Build openEuler RISC-V RPMs
+        required: true
+        type: string
+      qemu_rpm_sha256:
+        description: KVM_VALIDATION_SHA256 from the physical RISC-V host
+        required: true
+        type: string
 
 permissions:
+  actions: read
   contents: read
-  packages: read
   pages: write
   id-token: write
 
 jobs:
-  build:
-    runs-on: [self-hosted, linux, riscv64, openeuler-24.03-riscv64]
-    timeout-minutes: 360
+  validate-artifact:
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install build dependencies
-        run: |
-          sudo dnf install -y \
-            buildah createrepo_c dnf-plugins-core file git gnupg2 ninja-build \
-            rpm-build rpmdevtools skopeo xz
-          sudo dnf builddep -y qemu
-          sudo dnf builddep -y "${OPENVSWITCH_SRPM_URL}"
-        env:
-          OPENVSWITCH_SRPM_URL: https://mirror.iscas.ac.cn/openeuler/openEuler-24.03-LTS-SP3/update/source/Packages/openvswitch-3.2.1-5.oe2403sp3.src.rpm
-
-      - name: Build RPM repository
-        run: ./rpm/build-all.sh
-
-      - name: Upload RPM artifact
-        uses: actions/upload-artifact@v4
+      - name: Download the exact validated build artifact
+        uses: actions/download-artifact@v4
         with:
           name: cloudpods-openeuler-24.03-sp3-riscv64-rpms
-          if-no-files-found: error
-          path: |
-            dist/rpm/riscv64
-            site/cloudpods-riscv64.repo
+          path: validated
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Match the physical-host KVM attestation
+        shell: bash
+        env:
+          EXPECTED_QEMU_SHA256: ${{ inputs.qemu_rpm_sha256 }}
+        run: |
+          set -Eeuo pipefail
+          [[ ${EXPECTED_QEMU_SHA256} =~ ^[0-9a-f]{64}$ ]]
+          mapfile -t qemu_rpms < <(
+            find validated/dist/rpm/riscv64 -maxdepth 1 -type f \
+              -name 'qemu-riscv-cloudpods-*.riscv64.rpm' | sort
+          )
+          [[ ${#qemu_rpms[@]} -eq 1 ]]
+          echo "${EXPECTED_QEMU_SHA256}  ${qemu_rpms[0]}" | sha256sum --check
+          cd validated/site/rpm/openEuler/24.03-LTS-SP3/riscv64
+          sha256sum --check SHA256SUMS
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: validated/site
 
   deploy:
-    needs: build
+    needs: validate-artifact
     runs-on: ubuntu-24.04
     environment:
       name: github-pages

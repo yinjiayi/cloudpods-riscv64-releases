@@ -1,0 +1,42 @@
+name: Build openEuler RISC-V RPMs
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'rpm-riscv64-*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: [self-hosted, linux, riscv64, openeuler-24.03-riscv64]
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo dnf install -y \
+            buildah createrepo_c dnf-plugins-core file git gnupg2 ninja-build \
+            rpm-build rpmdevtools skopeo xz
+          sudo dnf builddep -y qemu
+          sudo dnf builddep -y "${OPENVSWITCH_SRPM_URL}"
+        env:
+          OPENVSWITCH_SRPM_URL: https://mirror.iscas.ac.cn/openeuler/openEuler-24.03-LTS-SP3/update/source/Packages/openvswitch-3.2.1-5.oe2403sp3.src.rpm
+
+      - name: Build RPM repository
+        run: ./rpm/build-all.sh
+        env:
+          QEMU_KVM_SMOKE: skip
+
+      - name: Upload unvalidated RPM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudpods-openeuler-24.03-sp3-riscv64-rpms
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            dist/rpm/riscv64
+            site
