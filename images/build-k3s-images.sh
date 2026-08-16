@@ -25,7 +25,7 @@ ensure_base_image() {
     local target_image=$1
     local source_image=${2:-$1}
 
-    if ! buildah image exists "${target_image}"; then
+    if ! buildah inspect "${target_image}" >/dev/null 2>&1; then
         buildah pull --arch riscv64 "${source_image}"
         [[ $(buildah inspect --format '{{.OCIv1.Architecture}}' \
             "${source_image}") == riscv64 ]]

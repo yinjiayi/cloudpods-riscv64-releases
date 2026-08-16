@@ -41,9 +41,9 @@ download_checked() {
 }
 
 dnf install -y \
-    binutils buildah curl file gcc gcc-c++ git glib2-devel gnupg2 jq \
-    libffi-devel make ninja-build pkgconf-pkg-config python3 skopeo tar xz \
-    zlib-devel zstd
+    binutils buildah containernetworking-plugins curl file gcc gcc-c++ git \
+    glib2-devel gnupg2 jq libffi-devel make ninja-build pkgconf-pkg-config \
+    python3 skopeo tar xz zlib-devel zstd
 install -d -m 0755 "${cache_dir}" "${bootstrap_root}/src"
 
 qemu_archive=${cache_dir}/qemu-${ACTION_RUNNER_QEMU_VERSION}.tar.xz

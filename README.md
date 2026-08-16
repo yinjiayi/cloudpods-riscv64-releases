@@ -32,7 +32,8 @@ fork.
 The native runner must provide:
 
 - openEuler 24.03 LTS SP3 on `riscv64`
-- Buildah, Skopeo, Git, RPM build tools, createrepo_c, GPG, GCC and Ninja
+- Buildah, CNI plugins, Skopeo, Git, RPM build tools, createrepo_c, GPG, GCC
+  and Ninja
 - at least 16 GiB RAM and 60 GiB free disk
 
 GitHub does not publish a native RISC-V Actions Runner. On a dedicated build
