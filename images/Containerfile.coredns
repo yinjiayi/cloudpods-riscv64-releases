@@ -3,6 +3,7 @@ FROM ghcr.io/yinjiayi/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1 AS bui
 ARG SOURCE_REF=v1.11.1
 ARG SOURCE_COMMIT
 ENV GOPROXY=https://goproxy.cn,direct
+RUN apk add --no-cache curl
 RUN curl --fail --location --retry 10 --retry-all-errors \
       "https://codeload.github.com/coredns/coredns/tar.gz/${SOURCE_COMMIT}" \
       --output /tmp/source.tar.gz && \
