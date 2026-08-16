@@ -12,9 +12,9 @@ source "${repo_root}/versions.env"
 
 bootstrap_root=${ACTION_RUNNER_BOOTSTRAP_ROOT:-/opt/actions-runner-bootstrap}
 cache_dir=${bootstrap_root}/cache
-qemu_source_dir=${bootstrap_root}/src/qemu-${QEMU_VERSION}
-qemu_build_dir=${bootstrap_root}/build-qemu-x86_64
-qemu_prefix=/opt/qemu-user-${QEMU_VERSION}
+qemu_source_dir=${bootstrap_root}/src/qemu-${ACTION_RUNNER_QEMU_VERSION}
+qemu_build_dir=${bootstrap_root}/build-qemu-x86_64-${ACTION_RUNNER_QEMU_VERSION}
+qemu_prefix=/opt/qemu-user-${ACTION_RUNNER_QEMU_VERSION}
 sysroot_suffix=${UBUNTU_RUNNER_OCI_SHA256:0:16}
 source_sysroot=/opt/x86_64-sysroot-ubuntu-${UBUNTU_RUNNER_RELEASE}-${sysroot_suffix}
 runner_sysroot=/opt/x86_64-sysroot-github-runner-${UBUNTU_RUNNER_RELEASE}-${sysroot_suffix}
@@ -45,15 +45,15 @@ dnf install -y \
     ninja-build pkgconf-pkg-config python3 tar xz zlib-devel zstd
 install -d -m 0755 "${cache_dir}" "${bootstrap_root}/src"
 
-qemu_archive=${cache_dir}/qemu-${QEMU_VERSION}.tar.xz
+qemu_archive=${cache_dir}/qemu-${ACTION_RUNNER_QEMU_VERSION}.tar.xz
 qemu_signature=${qemu_archive}.sig
 qemu_key=${cache_dir}/qemu-release-key.asc
 download_checked \
-    "https://download.qemu.org/qemu-${QEMU_VERSION}.tar.xz" \
-    "${qemu_archive}" "${QEMU_SOURCE_SHA256}"
+    "https://download.qemu.org/qemu-${ACTION_RUNNER_QEMU_VERSION}.tar.xz" \
+    "${qemu_archive}" "${ACTION_RUNNER_QEMU_SOURCE_SHA256}"
 curl --fail --location --retry 5 --retry-all-errors \
     --output "${qemu_signature}" \
-    "https://download.qemu.org/qemu-${QEMU_VERSION}.tar.xz.sig"
+    "https://download.qemu.org/qemu-${ACTION_RUNNER_QEMU_VERSION}.tar.xz.sig"
 curl --fail --location --retry 5 --retry-all-errors \
     --output "${qemu_key}" \
     "https://keys.openpgp.org/vks/v1/by-fingerprint/${QEMU_RELEASE_KEY_FINGERPRINT}"
@@ -69,7 +69,7 @@ if [[ ! -x ${qemu_prefix}/bin/qemu-x86_64 ]]; then
     if [[ ! -d ${qemu_source_dir} ]]; then
         tar -C "${bootstrap_root}/src" -xJf "${qemu_archive}"
     fi
-    [[ $(<"${qemu_source_dir}/VERSION") == ${QEMU_VERSION} ]]
+    [[ $(<"${qemu_source_dir}/VERSION") == ${ACTION_RUNNER_QEMU_VERSION} ]]
     install -d -m 0755 "${qemu_build_dir}"
     (
         cd "${qemu_build_dir}"
@@ -86,7 +86,8 @@ if [[ ! -x ${qemu_prefix}/bin/qemu-x86_64 ]]; then
     ninja -C "${qemu_build_dir}" -j "$(nproc)"
     ninja -C "${qemu_build_dir}" install
 fi
-"${qemu_prefix}/bin/qemu-x86_64" --version | grep -F "version ${QEMU_VERSION}"
+"${qemu_prefix}/bin/qemu-x86_64" --version \
+    | grep -F "version ${ACTION_RUNNER_QEMU_VERSION}"
 
 ubuntu_checksums=${cache_dir}/ubuntu-jammy-${UBUNTU_RUNNER_OCI_SERIAL}-SHA256SUMS
 ubuntu_signature=${ubuntu_checksums}.gpg
@@ -132,6 +133,17 @@ if [[ ! -d ${runner_sysroot}/etc ]]; then
 fi
 [[ $(readlink "${runner_sysroot}/usr/lib64/ld-linux-x86-64.so.2") == \
     ../lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 ]]
+
+# QEMU_LD_PREFIX also redirects glibc's absolute configuration-file lookups
+# into the compatibility sysroot.  Canonical's OCI rootfs intentionally ships
+# an empty resolv.conf, so copy the live host resolver and hosts files before
+# exercising or registering the runner.
+for network_file in resolv.conf hosts; do
+    [[ -r /etc/${network_file} ]]
+    install -m 0644 "/etc/${network_file}" \
+        "${runner_sysroot}/etc/${network_file}"
+done
+
 if [[ -L ${runner_sysroot_link} ]]; then
     [[ $(readlink -f "${runner_sysroot_link}") == ${runner_sysroot} ]]
 else
@@ -157,6 +169,61 @@ if [[ ! -x ${runner_root}/bin/Runner.Listener ]]; then
     test ! -e "${runner_root}"
     install -d -m 0755 "${runner_root}"
     tar -C "${runner_root}" -xzf "${runner_archive}"
+fi
+
+runner_jsonnet=${runner_root}/bin/Newtonsoft.Json.dll
+runner_jsonnet_backup=${runner_root}/bin/Newtonsoft.Json.dll.upstream
+runner_jsonnet_compat=${cache_dir}/Newtonsoft.Json.riscv64-compat.dll
+runner_jsonnet_sha=$(sha256sum "${runner_jsonnet}" | awk '{print $1}')
+case ${runner_jsonnet_sha} in
+    "${ACTION_RUNNER_NEWTONSOFT_UPSTREAM_SHA256}")
+        download_checked \
+            "https://github.com/yinjiayi/cloudpods-riscv64-releases/releases/download/${ACTION_RUNNER_COMPAT_RELEASE}/Newtonsoft.Json.riscv64-compat.dll" \
+            "${runner_jsonnet_compat}" \
+            "${ACTION_RUNNER_NEWTONSOFT_COMPAT_SHA256}"
+        install -m 0644 "${runner_jsonnet}" "${runner_jsonnet_backup}"
+        install -m 0644 "${runner_jsonnet_compat}" "${runner_jsonnet}"
+        ;;
+    "${ACTION_RUNNER_NEWTONSOFT_COMPAT_SHA256}")
+        ;;
+    *)
+        echo "unexpected Runner Newtonsoft.Json.dll SHA-256: ${runner_jsonnet_sha}" >&2
+        exit 1
+        ;;
+esac
+echo "${ACTION_RUNNER_NEWTONSOFT_COMPAT_SHA256}  ${runner_jsonnet}" \
+    | sha256sum --check
+if [[ -f ${runner_jsonnet_backup} ]]; then
+    echo "${ACTION_RUNNER_NEWTONSOFT_UPSTREAM_SHA256}  ${runner_jsonnet_backup}" \
+        | sha256sum --check
+fi
+
+runner_runtimeconfig=${runner_root}/bin/Runner.Listener.runtimeconfig.json
+runner_runtimeconfig_backup=${runner_runtimeconfig}.upstream
+runner_runtimeconfig_sha=$(sha256sum "${runner_runtimeconfig}" | awk '{print $1}')
+case ${runner_runtimeconfig_sha} in
+    "${ACTION_RUNNER_RUNTIMECONFIG_UPSTREAM_SHA256}")
+        install -m 0644 "${runner_runtimeconfig}" "${runner_runtimeconfig_backup}"
+        runner_runtimeconfig_tmp=$(mktemp "${runner_runtimeconfig}.XXXXXX")
+        sed '/"configProperties": {/a\      "Switch.System.Reflection.ForceInterpretedInvoke": true,' \
+            "${runner_runtimeconfig}" > "${runner_runtimeconfig_tmp}"
+        echo "${ACTION_RUNNER_RUNTIMECONFIG_COMPAT_SHA256}  ${runner_runtimeconfig_tmp}" \
+            | sha256sum --check
+        chmod 0644 "${runner_runtimeconfig_tmp}"
+        mv "${runner_runtimeconfig_tmp}" "${runner_runtimeconfig}"
+        ;;
+    "${ACTION_RUNNER_RUNTIMECONFIG_COMPAT_SHA256}")
+        ;;
+    *)
+        echo "unexpected Runner runtimeconfig SHA-256: ${runner_runtimeconfig_sha}" >&2
+        exit 1
+        ;;
+esac
+grep -Fq '"Switch.System.Reflection.ForceInterpretedInvoke": true' \
+    "${runner_runtimeconfig}"
+if [[ -f ${runner_runtimeconfig_backup} ]]; then
+    echo "${ACTION_RUNNER_RUNTIMECONFIG_UPSTREAM_SHA256}  ${runner_runtimeconfig_backup}" \
+        | sha256sum --check
 fi
 
 binfmt_conf=/etc/binfmt.d/qemu-x86_64-cloudpods.conf

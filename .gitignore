@@ -1,4 +1,6 @@
 /build-input/
 /dist/
 /site/
+/tools/**/bin/
+/tools/**/obj/
 *.part

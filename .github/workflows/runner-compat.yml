@@ -1,0 +1,85 @@
+name: Publish Actions Runner RISC-V compatibility asset
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.423'
+
+      - name: Download and verify the official Actions Runner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          source versions.env
+          install -d -m 0755 build-input/actions-runner dist
+          archive=build-input/actions-runner-linux-x64-${ACTION_RUNNER_VERSION}.tar.gz
+          curl --fail --location --retry 5 --retry-all-errors \
+            --output "${archive}" \
+            "https://github.com/actions/runner/releases/download/v${ACTION_RUNNER_VERSION}/actions-runner-linux-x64-${ACTION_RUNNER_VERSION}.tar.gz"
+          echo "${ACTION_RUNNER_X64_SHA256}  ${archive}" | sha256sum --check
+          tar -C build-input/actions-runner -xzf "${archive}"
+          echo "${ACTION_RUNNER_NEWTONSOFT_UPSTREAM_SHA256}  build-input/actions-runner/bin/Newtonsoft.Json.dll" \
+            | sha256sum --check
+
+      - name: Build and verify the deterministic compatibility DLL
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          source versions.env
+          dotnet run \
+            --project tools/runner-jsonnet-compat-patcher/RunnerJsonNetCompatPatcher.csproj \
+            --configuration Release \
+            -- \
+            build-input/actions-runner/bin/Newtonsoft.Json.dll \
+            dist/Newtonsoft.Json.riscv64-compat.dll \
+            "${ACTION_RUNNER_NEWTONSOFT_UPSTREAM_SHA256}" \
+            | tee dist/patch-report.txt
+          echo "${ACTION_RUNNER_NEWTONSOFT_COMPAT_SHA256}  dist/Newtonsoft.Json.riscv64-compat.dll" \
+            | sha256sum --check
+          (
+            cd dist
+            sha256sum Newtonsoft.Json.riscv64-compat.dll patch-report.txt \
+              > SHA256SUMS
+          )
+
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: actions-runner-riscv64-compat
+          if-no-files-found: error
+          path: dist
+
+      - name: Publish public release asset
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          source versions.env
+          notes='Compatibility assets for the official Actions Runner 2.336.0 on openEuler riscv64. The pinned patch forces Json.NET member access to reflection; the installer also enables the .NET 8 ForceInterpretedInvoke AppContext switch. W^X remains enabled.'
+          if gh release view "${ACTION_RUNNER_COMPAT_RELEASE}" >/dev/null 2>&1; then
+            gh release upload "${ACTION_RUNNER_COMPAT_RELEASE}" \
+              dist/Newtonsoft.Json.riscv64-compat.dll \
+              dist/patch-report.txt \
+              dist/SHA256SUMS \
+              --clobber
+          else
+            gh release create "${ACTION_RUNNER_COMPAT_RELEASE}" \
+              dist/Newtonsoft.Json.riscv64-compat.dll \
+              dist/patch-report.txt \
+              dist/SHA256SUMS \
+              --target "${GITHUB_SHA}" \
+              --title "Actions Runner ${ACTION_RUNNER_VERSION} RISC-V compatibility" \
+              --notes "${notes}"
+          fi

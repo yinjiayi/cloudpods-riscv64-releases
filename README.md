@@ -42,10 +42,18 @@ machine, install the pinned official x64 Runner control process with:
 sudo ./scripts/install-riscv64-actions-runner-runtime.sh
 ```
 
-The installer builds only QEMU `x86_64-linux-user`, verifies the signed Ubuntu
-22.04 OCI root filesystem, adds the pinned ICU runtime, and registers a binfmt
-handler. Runner and JavaScript action control processes are emulated; workflow
-shell commands and all actual builds remain native `riscv64`.
+The installer builds signed QEMU `11.1.0` as `x86_64-linux-user` only, verifies
+the signed Ubuntu 22.04 OCI root filesystem, adds the pinned ICU runtime, and
+registers a binfmt handler. Runner and JavaScript action control processes are
+emulated; workflow shell commands and all actual builds remain native
+`riscv64`. This QEMU is isolated below `/opt` and is independent of the QEMU
+`10.0.7` RPM used by Cloudpods guests.
+
+The official Runner's .NET 8 reflection emit path is not reliable under x64
+user-mode translation on RISC-V. The installer downloads a fixed-hash Json.NET
+compatibility DLL built by `runner-compat.yml`, and enables the official .NET
+`Switch.System.Reflection.ForceInterpretedInvoke` AppContext switch. This keeps
+W^X enabled and does not modify Cloudpods.
 
 Obtain a one-time repository registration token immediately before use, then
 run `scripts/register-riscv64-actions-runner.sh` with it in the
@@ -62,19 +70,21 @@ token is stored in repository secrets.
 
 ## Release order
 
-1. Run `Build K3s RISC-V images`.
-2. In each new package's GitHub package settings, change visibility to Public.
-3. Run `scripts/verify-ghcr-public.sh images/k3s-images.lock` without credentials.
-4. Tag the K3s fork with `v1.28.5+k3s1-riscv64.1`.
-5. Run `Build and publish Cloudpods RISC-V images`, make any new packages
+1. Run `Publish Actions Runner RISC-V compatibility asset` once for the pinned
+   Runner version, then install and register the RISC-V build runner.
+2. Run `Build K3s RISC-V images`.
+3. In each new package's GitHub package settings, change visibility to Public.
+4. Run `scripts/verify-ghcr-public.sh images/k3s-images.lock` without credentials.
+5. Tag the K3s fork with `v1.28.5+k3s1-riscv64.1`.
+6. Run `Build and publish Cloudpods RISC-V images`, make any new packages
    public, and verify `images/cloudpods-images.lock` the same way.
-6. Run `Build openEuler RISC-V RPMs` and note its workflow run ID.
-7. Download that run's RPM artifact to the physical RISC-V host and run
+7. Run `Build openEuler RISC-V RPMs` and note its workflow run ID.
+8. Download that run's RPM artifact to the physical RISC-V host and run
    `sudo rpm/verify-qemu-kvm-rpm.sh PATH_TO_QEMU_RPM`.
-8. Run `Publish KVM-validated RISC-V RPMs to Pages` with the original build run
+9. Run `Publish KVM-validated RISC-V RPMs to Pages` with the original build run
    ID and the emitted `KVM_VALIDATION_SHA256`. The publisher downloads and
    checks that exact artifact; it does not rebuild it.
-9. Tag and publish the ocboot RISC-V branch, then make its GHCR package public.
+10. Tag and publish the ocboot RISC-V branch, then make its GHCR package public.
 
 GitHub creates a newly published personal-account GHCR package as private.
 Changing it to public is a one-time GitHub UI action and cannot be performed by

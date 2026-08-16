@@ -24,6 +24,11 @@ runner_env=(
 
 [[ -x ${runner_root}/bin/Runner.Listener ]]
 [[ -r /proc/sys/fs/binfmt_misc/qemu-x86_64-cloudpods ]]
+for network_file in resolv.conf hosts; do
+    [[ -r /etc/${network_file} ]]
+    install -m 0644 "/etc/${network_file}" \
+        "${runner_sysroot}/etc/${network_file}"
+done
 cd "${runner_root}"
 
 replace_arg=()
@@ -60,6 +65,8 @@ printf '%s\n' \
     'Environment=DOTNET_gcServer=0' \
     'Environment=DOTNET_gcConcurrent=0' \
     'Environment=DOTNET_GCHeapHardLimit=0x40000000' \
+    "ExecStartPre=/usr/bin/install -m 0644 /etc/resolv.conf ${runner_sysroot}/etc/resolv.conf" \
+    "ExecStartPre=/usr/bin/install -m 0644 /etc/hosts ${runner_sysroot}/etc/hosts" \
     > "${dropin_tmp}"
 chmod 0644 "${dropin_tmp}"
 mv "${dropin_tmp}" "${dropin_dir}/10-riscv64-runtime.conf"
