@@ -1,4 +1,4 @@
-FROM ghcr.io/yinjiayi/k3s-golang:1.23-alpine3.20-riscv64.1 AS build
+FROM ghcr.io/yinjiayi/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1 AS build
 
 ARG SOURCE_REF=v0.0.29
 ARG SOURCE_COMMIT

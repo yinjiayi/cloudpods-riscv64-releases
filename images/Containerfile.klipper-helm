@@ -19,7 +19,7 @@ RUN curl --fail --location \
     tar xvzf /tmp/helm.tar.gz --strip-components=1 -C /usr/bin
 COPY --from=source /src/entry /usr/bin/entry
 
-FROM ghcr.io/yinjiayi/k3s-golang:1.23-alpine3.20-riscv64.1 AS plugins
+FROM ghcr.io/yinjiayi/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1 AS plugins
 ARG HELM_SET_STATUS_COMMIT
 ARG HELM_MAPKUBEAPIS_COMMIT
 ENV GOPROXY=https://goproxy.cn,direct

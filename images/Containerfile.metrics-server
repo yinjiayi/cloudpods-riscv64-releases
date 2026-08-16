@@ -1,4 +1,4 @@
-FROM ghcr.io/yinjiayi/k3s-golang:1.23-alpine3.20-riscv64.1 AS build
+FROM ghcr.io/yinjiayi/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1 AS build
 
 ARG SOURCE_REF=v0.7.2
 ARG SOURCE_COMMIT
@@ -12,9 +12,11 @@ RUN curl --fail --location --retry 10 --retry-all-errors \
     rm -f /tmp/source.tar.gz
 WORKDIR /src
 RUN go mod download
-RUN ARCH=riscv64 make metrics-server
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=riscv64 GOFLAGS=-buildvcs=false \
+    go build -trimpath -ldflags='-s -w' -o /out/metrics-server \
+    ./cmd/metrics-server
 
-FROM ghcr.io/yinjiayi/k3s-distroless-static:unstable-riscv64.1
-COPY --from=build /src/metrics-server /metrics-server
+FROM ghcr.io/yinjiayi/k3s-alpine:3.20-riscv64.1
+COPY --from=build /out/metrics-server /metrics-server
 USER 65534
 ENTRYPOINT ["/metrics-server"]
