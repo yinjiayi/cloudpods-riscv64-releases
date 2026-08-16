@@ -1,0 +1,6 @@
+FROM scratch
+
+COPY dist/rpm/riscv64/ /artifact/dist/rpm/riscv64/
+COPY site/ /artifact/site/
+
+CMD ["/artifact"]

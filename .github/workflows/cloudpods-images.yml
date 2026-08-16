@@ -34,13 +34,6 @@ jobs:
           npm run build
           grep -R -q riscv64 dist/js
 
-      - name: Upload dashboard assets
-        uses: actions/upload-artifact@v4
-        with:
-          name: dashboard-riscv64-dist
-          if-no-files-found: error
-          path: build-input/dashboard/dist
-
       - name: Download and verify the pinned K3s RISC-V release
         run: |
           set -Eeuo pipefail
@@ -62,12 +55,23 @@ jobs:
             sha256sum --check
           file build-input/k3s-release/k3s-riscv64 | grep -F 'UCB RISC-V'
 
-      - name: Upload the verified K3s RISC-V release
-        uses: actions/upload-artifact@v4
-        with:
-          name: k3s-riscv64-release
-          if-no-files-found: error
-          path: build-input/k3s-release
+      - name: Publish the pinned build assets to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          asset_root=build-input/cloudpods-build-assets
+          install -d -m 0755 "${asset_root}/dashboard" "${asset_root}/k3s"
+          cp -a build-input/dashboard/dist/. "${asset_root}/dashboard/"
+          cp -a build-input/k3s-release/. "${asset_root}/k3s/"
+          printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io \
+            --username "${GITHUB_ACTOR}" --password-stdin
+          docker buildx build \
+            --platform linux/riscv64 \
+            --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --file images/Containerfile.build-assets \
+            --tag "ghcr.io/yinjiayi/cloudpods-build-assets:${GITHUB_SHA}-riscv64" \
+            --push "${asset_root}"
 
   publish:
     needs: web-assets
@@ -89,24 +93,61 @@ jobs:
           test -x "${source_root}/images/build-cloudpods-images.sh"
           echo "RELEASE_SOURCE_ROOT=${source_root}" >> "${GITHUB_ENV}"
 
-      - name: Download dashboard assets
-        uses: actions/download-artifact@v4
-        with:
-          name: dashboard-riscv64-dist
-          path: ${{ runner.temp }}/cloudpods-riscv64-releases-${{ github.run_id }}-${{ github.run_attempt }}/build-input/dashboard-dist
-
-      - name: Download the verified K3s RISC-V release
-        uses: actions/download-artifact@v4
-        with:
-          name: k3s-riscv64-release
-          path: ${{ runner.temp }}/cloudpods-riscv64-releases-${{ github.run_id }}-${{ github.run_attempt }}/build-input/k3s-release
+      - name: Pull pinned build assets from GHCR with native tools
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          assets_image=ghcr.io/yinjiayi/cloudpods-build-assets:${GITHUB_SHA}-riscv64
+          assets_container=cloudpods-build-assets-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+          assets_root=${RELEASE_SOURCE_ROOT}/build-input
+          dashboard_dir=${assets_root}/dashboard-dist
+          k3s_dir=${assets_root}/k3s-release
+          assets_mount=
+          cleanup() {
+            if [[ -n ${assets_mount} ]]; then
+              buildah unmount "${assets_container}" >/dev/null 2>&1 || true
+            fi
+            buildah rm "${assets_container}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          printf '%s' "${GHCR_TOKEN}" | buildah login ghcr.io \
+            --username "${GITHUB_ACTOR}" --password-stdin
+          buildah pull --arch riscv64 "${assets_image}"
+          buildah from --name "${assets_container}" "${assets_image}" >/dev/null
+          assets_mount=$(buildah mount "${assets_container}")
+          install -d -m 0755 "${dashboard_dir}" "${k3s_dir}"
+          cp -a "${assets_mount}/assets/dashboard/." "${dashboard_dir}/"
+          cp -a "${assets_mount}/assets/k3s/." "${k3s_dir}/"
+          test -f "${dashboard_dir}/index.html"
+          test -f "${k3s_dir}/k3s-riscv64"
+          chmod 0755 "${k3s_dir}/k3s-riscv64"
+          echo "DASHBOARD_DIST_DIR=${dashboard_dir}" >> "${GITHUB_ENV}"
+          echo "K3S_RELEASE_DIR=${k3s_dir}" >> "${GITHUB_ENV}"
 
       - name: Build Cloudpods images from pinned source and publish them
         env:
-          DASHBOARD_DIST_DIR: ${{ runner.temp }}/cloudpods-riscv64-releases-${{ github.run_id }}-${{ github.run_attempt }}/build-input/dashboard-dist
-          K3S_RELEASE_DIR: ${{ runner.temp }}/cloudpods-riscv64-releases-${{ github.run_id }}-${{ github.run_attempt }}/build-input/k3s-release
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: "${RELEASE_SOURCE_ROOT}/images/build-cloudpods-images.sh"
+
+  verify-public:
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install registry inspection tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq skopeo
+
+      - name: Verify anonymous RISC-V pulls and write digest lock
+        run: |
+          scripts/write-image-digests.sh \
+            images/cloudpods-images.lock \
+            dist/cloudpods-images-riscv64.digests \
+            riscv64
 
       - name: Upload digest lock
         uses: actions/upload-artifact@v4
@@ -114,5 +155,5 @@ jobs:
           name: cloudpods-images-riscv64-digests
           if-no-files-found: error
           path: |
-            ${{ runner.temp }}/cloudpods-riscv64-releases-${{ github.run_id }}-${{ github.run_attempt }}/dist/cloudpods-images-riscv64.digests
-            ${{ runner.temp }}/cloudpods-riscv64-releases-${{ github.run_id }}-${{ github.run_attempt }}/dist/cloudpods-images-riscv64.digests.sha256
+            dist/cloudpods-images-riscv64.digests
+            dist/cloudpods-images-riscv64.digests.sha256

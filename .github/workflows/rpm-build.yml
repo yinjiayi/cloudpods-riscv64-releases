@@ -8,11 +8,14 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
   build:
     runs-on: [self-hosted, linux, riscv64, openeuler-24.03-riscv64]
     timeout-minutes: 360
+    outputs:
+      rpm_bundle_image: ${{ steps.publish-bundle.outputs.image }}
     steps:
       - name: Fetch pinned workflow source with native curl
         shell: bash
@@ -44,6 +47,50 @@ jobs:
         env:
           QEMU_KVM_SMOKE: skip
 
+      - name: Publish the unvalidated RPM bundle to GHCR
+        id: publish-bundle
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          bundle_image=ghcr.io/yinjiayi/cloudpods-rpm-build:${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+          printf '%s' "${GHCR_TOKEN}" | buildah login ghcr.io \
+            --username "${GITHUB_ACTOR}" --password-stdin
+          buildah bud \
+            --arch riscv64 \
+            --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --file "${RELEASE_SOURCE_ROOT}/rpm/Containerfile.artifact" \
+            --tag "${bundle_image}" \
+            "${RELEASE_SOURCE_ROOT}"
+          buildah push "${bundle_image}" "docker://${bundle_image}"
+          echo "image=${bundle_image}" >> "${GITHUB_OUTPUT}"
+
+  export-artifact:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Export the exact GHCR bundle
+        env:
+          BUNDLE_IMAGE: ${{ needs.build.outputs.rpm_bundle_image }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${BUNDLE_IMAGE}"
+          printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io \
+            --username "${GITHUB_ACTOR}" --password-stdin
+          docker pull --platform linux/riscv64 "${BUNDLE_IMAGE}"
+          container_id=$(docker create --platform linux/riscv64 "${BUNDLE_IMAGE}")
+          trap 'docker rm -f "${container_id}" >/dev/null 2>&1 || true' EXIT
+          install -d -m 0755 validated
+          docker cp "${container_id}:/artifact/." validated/
+          test -f validated/dist/rpm/riscv64/SHA256SUMS
+          test -d validated/site/rpm/openEuler/24.03-LTS-SP3/riscv64/repodata
+          (
+            cd validated/dist/rpm/riscv64
+            sha256sum --check SHA256SUMS
+          )
+
       - name: Upload unvalidated RPM artifact
         uses: actions/upload-artifact@v4
         with:
@@ -51,5 +98,5 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           path: |
-            ${{ runner.temp }}/cloudpods-riscv64-releases-${{ github.run_id }}-${{ github.run_attempt }}/dist/rpm/riscv64
-            ${{ runner.temp }}/cloudpods-riscv64-releases-${{ github.run_id }}-${{ github.run_attempt }}/site
+            validated/dist/rpm/riscv64
+            validated/site

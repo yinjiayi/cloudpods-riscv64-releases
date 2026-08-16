@@ -1,0 +1,4 @@
+FROM scratch
+
+COPY dashboard/ /assets/dashboard/
+COPY k3s/ /assets/k3s/
