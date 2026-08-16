@@ -12,14 +12,20 @@ rpmbuild_root=${work_root}/rpmbuild
 output_dir=${repo_root}/dist/rpm/riscv64
 builder_image=${GHCR_NAMESPACE}/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1
 
-git clone --depth 1 --branch "${CLOUDPODS_VERSION}" \
-    https://github.com/yunionio/cloudpods.git "${source_dir}"
+source_archive=${work_root}/cloudpods.tar.gz
+curl --fail --location --retry 10 --retry-all-errors \
+    --connect-timeout 20 --max-time 600 \
+    "https://codeload.github.com/yunionio/cloudpods/tar.gz/${CLOUDPODS_VERSION}" \
+    --output "${source_archive}"
+install -d -m 0755 "${source_dir}"
+tar -C "${source_dir}" --strip-components=1 -xzf "${source_archive}"
 git -C "${source_dir}" apply \
     "${repo_root}/rpm/SOURCES/cloudpods-executor-parse-flags.patch"
 
 buildah rm cloudpods-executor-builder >/dev/null 2>&1 || true
 buildah from --name cloudpods-executor-builder "${builder_image}" >/dev/null
 buildah run \
+    --env GOPROXY=https://goproxy.cn,direct \
     --volume "${source_dir}:/src:rw" \
     cloudpods-executor-builder -- \
     sh -ec 'cd /src; install -d _output/alpine-build/bin; make ONECLOUD_CI_BUILD=1 GIT_VERSION=v4.0.3 GIT_BRANCH=release/4.0.3 GIT_TREE_STATE=dirty BIN_DIR=/src/_output/alpine-build/bin cmd/executor-server cmd/climc'

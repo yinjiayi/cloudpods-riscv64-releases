@@ -2,10 +2,15 @@ FROM ghcr.io/yinjiayi/k3s-golang:1.23-alpine3.20-riscv64.1 AS build
 
 ARG SOURCE_REF=v0.7.2
 ARG SOURCE_COMMIT
-RUN apk add --no-cache bash build-base git
-RUN git clone --depth 1 --branch "${SOURCE_REF}" https://github.com/kubernetes-sigs/metrics-server.git /src
+ENV GOPROXY=https://goproxy.cn,direct
+RUN apk add --no-cache bash build-base curl
+RUN curl --fail --location --retry 10 --retry-all-errors \
+      "https://codeload.github.com/kubernetes-sigs/metrics-server/tar.gz/${SOURCE_COMMIT}" \
+      --output /tmp/source.tar.gz && \
+    mkdir -p /src && \
+    tar -C /src --strip-components=1 -xzf /tmp/source.tar.gz && \
+    rm -f /tmp/source.tar.gz
 WORKDIR /src
-RUN test "$(git rev-parse HEAD)" = "${SOURCE_COMMIT}"
 RUN go mod download
 RUN ARCH=riscv64 make metrics-server
 

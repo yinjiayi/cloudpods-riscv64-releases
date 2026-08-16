@@ -1,11 +1,12 @@
 FROM ghcr.io/yinjiayi/k3s-alpine:3.20-riscv64.1 AS source
 ARG SOURCE_COMMIT
-RUN apk add --no-cache git && \
-    git init /src && \
-    git -C /src remote add origin https://github.com/k3s-io/klipper-helm.git && \
-    git -C /src fetch --depth 1 origin "${SOURCE_COMMIT}" && \
-    git -C /src checkout --detach FETCH_HEAD && \
-    test "$(git -C /src rev-parse HEAD)" = "${SOURCE_COMMIT}"
+RUN apk add --no-cache curl && \
+    curl --fail --location --retry 10 --retry-all-errors \
+      "https://codeload.github.com/k3s-io/klipper-helm/tar.gz/${SOURCE_COMMIT}" \
+      --output /tmp/source.tar.gz && \
+    mkdir -p /src && \
+    tar -C /src --strip-components=1 -xzf /tmp/source.tar.gz && \
+    rm -f /tmp/source.tar.gz
 
 FROM ghcr.io/yinjiayi/k3s-alpine:3.20-riscv64.1 AS extract
 ARG HELM_VERSION=v3.16.1
@@ -21,17 +22,24 @@ COPY --from=source /src/entry /usr/bin/entry
 FROM ghcr.io/yinjiayi/k3s-golang:1.23-alpine3.20-riscv64.1 AS plugins
 ARG HELM_SET_STATUS_COMMIT
 ARG HELM_MAPKUBEAPIS_COMMIT
-RUN apk add --no-cache curl ca-certificates build-base git
+ENV GOPROXY=https://goproxy.cn,direct
+RUN apk add --no-cache curl ca-certificates build-base
 COPY --from=extract /usr/bin/helm /usr/bin/helm
-RUN git clone https://github.com/k3s-io/helm-set-status.git \
-      /go/src/github.com/k3s-io/helm-set-status && \
-    git -C /go/src/github.com/k3s-io/helm-set-status checkout --detach \
-      "${HELM_SET_STATUS_COMMIT}" && \
+RUN curl --fail --location --retry 10 --retry-all-errors \
+      "https://codeload.github.com/k3s-io/helm-set-status/tar.gz/${HELM_SET_STATUS_COMMIT}" \
+      --output /tmp/helm-set-status.tar.gz && \
+    mkdir -p /go/src/github.com/k3s-io/helm-set-status && \
+    tar -C /go/src/github.com/k3s-io/helm-set-status --strip-components=1 \
+      -xzf /tmp/helm-set-status.tar.gz && \
+    rm -f /tmp/helm-set-status.tar.gz && \
     make -C /go/src/github.com/k3s-io/helm-set-status install
-RUN git clone https://github.com/helm/helm-mapkubeapis.git \
-      /go/src/github.com/helm/helm-mapkubeapis && \
-    git -C /go/src/github.com/helm/helm-mapkubeapis checkout --detach \
-      "${HELM_MAPKUBEAPIS_COMMIT}" && \
+RUN curl --fail --location --retry 10 --retry-all-errors \
+      "https://codeload.github.com/helm/helm-mapkubeapis/tar.gz/${HELM_MAPKUBEAPIS_COMMIT}" \
+      --output /tmp/helm-mapkubeapis.tar.gz && \
+    mkdir -p /go/src/github.com/helm/helm-mapkubeapis && \
+    tar -C /go/src/github.com/helm/helm-mapkubeapis --strip-components=1 \
+      -xzf /tmp/helm-mapkubeapis.tar.gz && \
+    rm -f /tmp/helm-mapkubeapis.tar.gz && \
     make -C /go/src/github.com/helm/helm-mapkubeapis && \
     mkdir -p /root/.local/share/helm/plugins/helm-mapkubeapis && \
     cp -r /go/src/github.com/helm/helm-mapkubeapis/plugin.yaml \

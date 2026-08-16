@@ -2,9 +2,14 @@ FROM ghcr.io/yinjiayi/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1 AS bui
 
 ARG KUBERNETES_REF=948afe5ca072329a73c8e79ed5938717a5cb3d21
 ARG PAUSE_VERSION=3.10
-RUN curl --fail --location \
-    "https://raw.githubusercontent.com/kubernetes/kubernetes/${KUBERNETES_REF}/build/pause/linux/pause.c" \
-    --output /pause.c
+RUN curl --fail --location --retry 10 --retry-all-errors \
+      "https://codeload.github.com/kubernetes/kubernetes/tar.gz/${KUBERNETES_REF}" \
+      --output /tmp/kubernetes.tar.gz && \
+    mkdir -p /tmp/kubernetes && \
+    tar -C /tmp/kubernetes --strip-components=1 \
+      -xzf /tmp/kubernetes.tar.gz && \
+    cp /tmp/kubernetes/build/pause/linux/pause.c /pause.c && \
+    rm -rf /tmp/kubernetes /tmp/kubernetes.tar.gz
 RUN gcc -Os -Wall -Werror -static -DVERSION=v${PAUSE_VERSION} -o /pause /pause.c
 
 FROM scratch

@@ -1,11 +1,12 @@
 FROM ghcr.io/yinjiayi/k3s-alpine:3.20-riscv64.1 AS source
 ARG SOURCE_COMMIT
-RUN apk add --no-cache git && \
-    git init /src && \
-    git -C /src remote add origin https://github.com/k3s-io/klipper-lb.git && \
-    git -C /src fetch --depth 1 origin "${SOURCE_COMMIT}" && \
-    git -C /src checkout --detach FETCH_HEAD && \
-    test "$(git -C /src rev-parse HEAD)" = "${SOURCE_COMMIT}"
+RUN apk add --no-cache curl && \
+    curl --fail --location --retry 10 --retry-all-errors \
+      "https://codeload.github.com/k3s-io/klipper-lb/tar.gz/${SOURCE_COMMIT}" \
+      --output /tmp/source.tar.gz && \
+    mkdir -p /src && \
+    tar -C /src --strip-components=1 -xzf /tmp/source.tar.gz && \
+    rm -f /tmp/source.tar.gz
 
 FROM ghcr.io/yinjiayi/k3s-alpine:3.20-riscv64.1
 ARG BUILDDATE

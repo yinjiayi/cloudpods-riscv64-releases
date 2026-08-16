@@ -41,6 +41,34 @@ jobs:
           if-no-files-found: error
           path: build-input/dashboard/dist
 
+      - name: Download and verify the pinned K3s RISC-V release
+        run: |
+          set -Eeuo pipefail
+          source versions.env
+          release_tag=${K3S_VERSION//+/%2B}
+          release_url=https://github.com/yinjiayi/k3s/releases/download/${release_tag}
+          install -d -m 0755 build-input/k3s-release
+          curl --fail --location --retry 10 --retry-all-errors \
+            --output build-input/k3s-release/k3s-riscv64 \
+            "${release_url}/k3s-riscv64"
+          curl --fail --location --retry 10 --retry-all-errors \
+            --output build-input/k3s-release/sha256sum-riscv64.txt \
+            "${release_url}/sha256sum-riscv64.txt"
+          chmod 0755 build-input/k3s-release/k3s-riscv64
+          expected_sha256=$(awk '$2 == "k3s-riscv64" || $2 == "*k3s-riscv64" {print $1}' \
+            build-input/k3s-release/sha256sum-riscv64.txt)
+          test "${#expected_sha256}" = 64
+          echo "${expected_sha256}  build-input/k3s-release/k3s-riscv64" | \
+            sha256sum --check
+          file build-input/k3s-release/k3s-riscv64 | grep -F 'UCB RISC-V'
+
+      - name: Upload the verified K3s RISC-V release
+        uses: actions/upload-artifact@v4
+        with:
+          name: k3s-riscv64-release
+          if-no-files-found: error
+          path: build-input/k3s-release
+
   publish:
     needs: web-assets
     runs-on: [self-hosted, linux, riscv64, openeuler-24.03-riscv64]
@@ -67,9 +95,16 @@ jobs:
           name: dashboard-riscv64-dist
           path: ${{ runner.temp }}/cloudpods-riscv64-releases-${{ github.run_id }}-${{ github.run_attempt }}/build-input/dashboard-dist
 
+      - name: Download the verified K3s RISC-V release
+        uses: actions/download-artifact@v4
+        with:
+          name: k3s-riscv64-release
+          path: ${{ runner.temp }}/cloudpods-riscv64-releases-${{ github.run_id }}-${{ github.run_attempt }}/build-input/k3s-release
+
       - name: Build Cloudpods images from pinned source and publish them
         env:
           DASHBOARD_DIST_DIR: ${{ runner.temp }}/cloudpods-riscv64-releases-${{ github.run_id }}-${{ github.run_attempt }}/build-input/dashboard-dist
+          K3S_RELEASE_DIR: ${{ runner.temp }}/cloudpods-riscv64-releases-${{ github.run_id }}-${{ github.run_attempt }}/build-input/k3s-release
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: "${RELEASE_SOURCE_ROOT}/images/build-cloudpods-images.sh"
 

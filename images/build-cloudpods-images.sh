@@ -11,6 +11,7 @@ source "${repo_root}/versions.env"
 : "${GITHUB_ACTOR:?GITHUB_ACTOR is required}"
 : "${GHCR_TOKEN:?GHCR_TOKEN is required}"
 : "${DASHBOARD_DIST_DIR:?DASHBOARD_DIST_DIR is required}"
+: "${K3S_RELEASE_DIR:?K3S_RELEASE_DIR is required}"
 
 for command_name in buildah curl file git jq sha256sum skopeo; do
     command -v "${command_name}" >/dev/null 2>&1 || {
@@ -20,6 +21,8 @@ for command_name in buildah curl file git jq sha256sum skopeo; do
 done
 [[ -f ${DASHBOARD_DIST_DIR}/index.html ]]
 grep -R -q riscv64 "${DASHBOARD_DIST_DIR}/js"
+[[ -f ${K3S_RELEASE_DIR}/k3s-riscv64 ]]
+[[ -f ${K3S_RELEASE_DIR}/sha256sum-riscv64.txt ]]
 
 work_root=$(mktemp -d "${RUNNER_TEMP:-/tmp}/cloudpods-images.XXXXXX")
 source_dir=${work_root}/src
@@ -45,10 +48,21 @@ clone_exact() {
     local source_ref=$2
     local source_commit=$3
     local destination=$4
+    local repository_path
+    local source_archive
 
-    git clone --depth 1 --branch "${source_ref}" "${repository}" "${destination}"
-    [[ $(git -C "${destination}" rev-parse HEAD) == "${source_commit}" ]]
-    [[ -z $(git -C "${destination}" status --porcelain) ]]
+    repository_path=${repository#https://github.com/}
+    repository_path=${repository_path%.git}
+    [[ ${repository_path} != "${repository}" && ${repository_path} == */* ]]
+    [[ -n ${source_ref} ]]
+    source_archive=${work_root}/$(basename "${destination}").tar.gz
+    curl --fail --location --retry 10 --retry-all-errors \
+        --connect-timeout 20 --max-time 600 \
+        "https://codeload.github.com/${repository_path}/tar.gz/${source_commit}" \
+        --output "${source_archive}"
+    install -d -m 0755 "${destination}"
+    tar -C "${destination}" --strip-components=1 -xzf "${source_archive}"
+    rm -f "${source_archive}"
 }
 
 apply_source_patch() {
@@ -111,6 +125,7 @@ builder_image=${GHCR_NAMESPACE}/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv6
 new_builder cloudpods-operator-builder "${builder_image}"
 operator_builder=${BUILDER_NAME}
 buildah run \
+    --env GOPROXY=https://goproxy.cn,direct \
     --volume "${source_dir}/onecloud-operator:/src:rw" \
     "${operator_builder}" -- \
     sh -ec 'cd /src; install -d _output/alpine-build/bin; make VERSION=v4.0.3 GOARCH=riscv64 BIN_DIR=/src/_output/alpine-build/bin onecloud-operator; test -x _output/alpine-build/bin/onecloud-controller-manager'
@@ -119,6 +134,7 @@ remove_builder "${operator_builder}"
 new_builder cloudpods-core-builder "${builder_image}"
 cloudpods_builder=${BUILDER_NAME}
 buildah run \
+    --env GOPROXY=https://goproxy.cn,direct \
     --volume "${source_dir}/cloudpods:/src:rw" \
     "${cloudpods_builder}" -- \
     sh -ec "cd /src; install -d _output/alpine-build/bin; make -j\$(nproc) ONECLOUD_CI_BUILD=1 GIT_VERSION=v4.0.3 GIT_COMMIT=${CLOUDPODS_SOURCE_COMMIT} GIT_BRANCH=${CLOUDPODS_SOURCE_REF} GIT_TREE_STATE=dirty BIN_DIR=/src/_output/alpine-build/bin cmd/keystone cmd/logger cmd/region cmd/scheduler cmd/glance cmd/torrent cmd/webconsole cmd/apigateway cmd/yunionconf cmd/host cmd/host-deployer cmd/climc cmd/executor-server cmd/monitor cmd/notify; test -x _output/alpine-build/bin/host; test -x _output/alpine-build/bin/region; test -x _output/alpine-build/bin/executor-server"
@@ -127,22 +143,20 @@ remove_builder "${cloudpods_builder}"
 new_builder cloudpods-sdn-builder "${builder_image}"
 sdn_builder=${BUILDER_NAME}
 buildah run \
+    --env GOPROXY=https://goproxy.cn,direct \
     --volume "${source_dir}/sdnagent:/src:rw" \
     "${sdn_builder}" -- \
     sh -ec 'cd /src; install -d _output/alpine-build/bin; GOOS=linux GOARCH=riscv64 CGO_ENABLED=0 go build -mod vendor -trimpath -o _output/alpine-build/bin/sdnagent ./cmd/sdnagent; GOOS=linux GOARCH=riscv64 CGO_ENABLED=0 go build -mod vendor -trimpath -o _output/alpine-build/bin/sdncli ./cmd/sdncli'
 remove_builder "${sdn_builder}"
 
-k3s_release_url=https://github.com/yinjiayi/k3s/releases/download/v1.28.5%2Bk3s1-riscv64.1
-curl --fail --location --retry 3 \
-    "${k3s_release_url}/k3s-riscv64" \
-    --output "${work_root}/k3s-riscv64"
-curl --fail --location --retry 3 \
-    "${k3s_release_url}/sha256sum-riscv64.txt" \
-    --output "${work_root}/sha256sum-riscv64.txt"
+cp "${K3S_RELEASE_DIR}/k3s-riscv64" "${work_root}/k3s-riscv64"
+cp "${K3S_RELEASE_DIR}/sha256sum-riscv64.txt" \
+    "${work_root}/sha256sum-riscv64.txt"
 k3s_sha256=$(awk '$2 == "k3s-riscv64" || $2 == "*k3s-riscv64" {print $1}' \
     "${work_root}/sha256sum-riscv64.txt")
 [[ ${k3s_sha256} =~ ^[0-9a-f]{64}$ ]]
 printf '%s  %s\n' "${k3s_sha256}" "${work_root}/k3s-riscv64" | sha256sum --check
+chmod 0755 "${work_root}/k3s-riscv64"
 
 cloudpods_stage=${stage_dir}/cloudpods
 operator_stage=${stage_dir}/operator
