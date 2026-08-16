@@ -76,7 +76,8 @@ token is stored in repository secrets.
 1. Run `Publish Actions Runner RISC-V compatibility asset` once for the pinned
    Runner version, then install and register the RISC-V build runner.
 2. Run `Build K3s RISC-V images`.
-3. In each new package's GitHub package settings, change visibility to Public.
+3. Confirm each new package is Public in GitHub package settings; change it if
+   the package did not inherit visibility from the public source repository.
 4. Run `scripts/verify-ghcr-public.sh images/k3s-images.lock` without credentials.
 5. Tag the K3s fork with `v1.28.5+k3s1-riscv64.1`.
 6. Run `Build and publish Cloudpods RISC-V images`, make any new packages
@@ -87,11 +88,13 @@ token is stored in repository secrets.
 9. Run `Publish KVM-validated RISC-V RPMs to Pages` with the original build run
    ID and the emitted `KVM_VALIDATION_SHA256`. The publisher downloads and
    checks that exact artifact; it does not rebuild it.
-10. Tag and publish the ocboot RISC-V branch, then make its GHCR package public.
+10. Tag and publish the ocboot RISC-V branch, then verify its GHCR package is
+    public.
 
-GitHub creates a newly published personal-account GHCR package as private.
-Changing it to public is a one-time GitHub UI action and cannot be performed by
-the documented Packages REST API. Later versions keep the package visibility.
+Packages linked to this public source repository currently inherit Public
+visibility. Always confirm the package settings and run the anonymous
+`verify-ghcr-public.sh` check anyway. If a package is Private, changing it to
+Public is a one-time GitHub UI action; later versions keep that visibility.
 
 Every workflow verifies the architecture and emits SHA-256 checksums before
 publishing.
