@@ -49,10 +49,13 @@ emulated; workflow shell commands and all actual builds remain native
 `riscv64`. This QEMU is isolated below `/opt` and is independent of the QEMU
 `10.0.7` RPM used by Cloudpods guests.
 
-The official Runner's .NET 8 reflection emit path is not reliable under x64
+The official Runner's .NET 8 dynamic-code paths are not reliable under x64
 user-mode translation on RISC-V. The installer downloads a fixed-hash Json.NET
-compatibility DLL built by `runner-compat.yml`, and enables the official .NET
-`Switch.System.Reflection.ForceInterpretedInvoke` AppContext switch. This keeps
+compatibility DLL built by `runner-compat.yml`, then applies the official .NET
+`Switch.System.Reflection.ForceInterpretedInvoke` and
+`System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported=false`
+AppContext settings to Listener, Worker, and PluginHost. Reflection invokes and
+compiled regular expressions therefore use their interpreter paths. This keeps
 W^X enabled and does not modify Cloudpods.
 
 Obtain a one-time repository registration token immediately before use, then

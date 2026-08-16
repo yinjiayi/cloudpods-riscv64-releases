@@ -67,8 +67,11 @@ jobs:
         run: |
           set -Eeuo pipefail
           source versions.env
-          notes='Compatibility assets for the official Actions Runner 2.336.0 on openEuler riscv64. The pinned patch forces Json.NET member access to reflection; the installer also enables the .NET 8 ForceInterpretedInvoke AppContext switch. W^X remains enabled.'
+          notes='Compatibility assets for the official Actions Runner 2.336.0 on openEuler riscv64. The pinned patch forces Json.NET member access to reflection; the installer also enables the .NET 8 ForceInterpretedInvoke and RuntimeFeature.IsDynamicCodeSupported=false AppContext settings on Listener, Worker, and PluginHost. W^X remains enabled.'
           if gh release view "${ACTION_RUNNER_COMPAT_RELEASE}" >/dev/null 2>&1; then
+            gh release edit "${ACTION_RUNNER_COMPAT_RELEASE}" \
+              --title "Actions Runner ${ACTION_RUNNER_VERSION} RISC-V compatibility" \
+              --notes "${notes}"
             gh release upload "${ACTION_RUNNER_COMPAT_RELEASE}" \
               dist/Newtonsoft.Json.riscv64-compat.dll \
               dist/patch-report.txt \

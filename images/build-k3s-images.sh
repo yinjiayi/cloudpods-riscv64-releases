@@ -21,14 +21,11 @@ done
 printf '%s' "${GHCR_TOKEN}" | buildah login \
     --username "${GITHUB_ACTOR}" --password-stdin ghcr.io
 
-mirror_image() {
-    local source_image=$1
-    local target_image=$2
+pull_base_image() {
+    local image=$1
 
-    buildah pull --arch riscv64 "${source_image}"
-    [[ $(buildah inspect --format '{{.OCIv1.Architecture}}' "${source_image}") == riscv64 ]]
-    buildah tag "${source_image}" "${target_image}"
-    buildah push "${target_image}" "docker://${target_image}"
+    buildah pull --arch riscv64 "${image}"
+    [[ $(buildah inspect --format '{{.OCIv1.Architecture}}' "${image}") == riscv64 ]]
 }
 
 build_image() {
@@ -49,23 +46,14 @@ build_image() {
     buildah push "${target_image}" "docker://${target_image}"
 }
 
-# Build roots are mirrored first so every Containerfile resolves its base from
-# the same GHCR namespace used by customer deployments.
-mirror_image \
-    docker.io/library/alpine@${ALPINE_RISCV64_DIGEST} \
-    ${GHCR_NAMESPACE}/k3s-alpine:3.20-riscv64.1
-mirror_image \
-    docker.io/library/golang@${GOLANG_1_23_RISCV64_DIGEST} \
-    ${GHCR_NAMESPACE}/k3s-golang:1.23-alpine3.20-riscv64.1
-mirror_image \
-    ghcr.io/go-riscv/distroless/static-unstable@${DISTROLESS_STATIC_RISCV64_DIGEST} \
-    ${GHCR_NAMESPACE}/k3s-distroless-static:unstable-riscv64.1
-mirror_image \
-    registry.cn-beijing.aliyuncs.com/yunionio/alpine-build:3.22.2-go-1.24.9-0 \
-    ${GHCR_NAMESPACE}/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1
-mirror_image \
-    docker.io/riscv64/busybox@${BUSYBOX_RISCV64_DIGEST} \
-    ${GHCR_NAMESPACE}/k3s-busybox:${BUSYBOX_VERSION}-riscv64.1
+# Hosted GitHub infrastructure mirrors every digest-pinned build root into the
+# release namespace first.  The RISC-V runner and customer deployments only
+# need access to GHCR.
+pull_base_image ${GHCR_NAMESPACE}/k3s-alpine:3.20-riscv64.1
+pull_base_image ${GHCR_NAMESPACE}/k3s-golang:1.23-alpine3.20-riscv64.1
+pull_base_image ${GHCR_NAMESPACE}/k3s-distroless-static:unstable-riscv64.1
+pull_base_image ${GHCR_NAMESPACE}/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1
+pull_base_image ${GHCR_NAMESPACE}/k3s-busybox:${BUSYBOX_VERSION}-riscv64.1
 
 build_image \
     k3s-coredns:${COREDNS_VERSION}-riscv64.1 \

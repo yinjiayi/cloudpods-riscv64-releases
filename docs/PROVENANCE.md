@@ -14,10 +14,11 @@ checked against SHA-256 digests before a release is published.
 | Local Path Provisioner | `rancher/local-path-provisioner` tag `v0.0.29` |
 | klipper-helm | upstream source plus `k3s-io/klipper-helm` PR 64, commit `8a71d64` |
 | klipper-lb | upstream source plus `k3s-io/klipper-lb` PR 56, commit `faaeca6` |
+| K3s build bases | architecture-specific upstream digests mirrored by a hosted runner to `ghcr.io/yinjiayi` before native RISC-V builds |
 | Cloudpods QEMU | signed `download.qemu.org` source `10.0.7` |
 | Actions Runner QEMU | signed `download.qemu.org` source `11.1.0`, `x86_64-linux-user` only |
 | GitHub Actions Runner | official `actions/runner` x64 release `2.336.0`, SHA-256 pinned |
-| Runner .NET compatibility | deterministic Mono.Cecil `0.11.6` transform of the pinned Json.NET DLL plus the .NET 8 `ForceInterpretedInvoke` AppContext switch |
+| Runner .NET compatibility | deterministic Mono.Cecil `0.11.6` transform of the pinned Json.NET DLL plus the .NET 8 `ForceInterpretedInvoke` and `RuntimeFeature.IsDynamicCodeSupported=false` AppContext settings on Listener, Worker, and PluginHost |
 | Runner sysroot | signed Canonical Ubuntu 22.04 OCI build `20260810`, SHA-256 pinned |
 | Runner ICU | Ubuntu Jammy `libicu70` package `70.1-2`, SHA-256 pinned |
 | Open vSwitch | openEuler 24.03 LTS SP3 SRPM plus the checked-in GCC 14 patch |

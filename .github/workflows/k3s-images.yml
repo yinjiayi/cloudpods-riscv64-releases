@@ -11,27 +11,61 @@ permissions:
   packages: write
 
 jobs:
-  cross-build-base:
+  mirror-build-bases:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
-      - name: Mirror pinned amd64 K3s build base to GHCR
+      - name: Install registry copy tool
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+
+      - name: Mirror pinned K3s build bases to GHCR
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io \
+          set -Eeuo pipefail
+          source versions.env
+          printf '%s' "${GHCR_TOKEN}" | skopeo login ghcr.io \
             --username "${GITHUB_ACTOR}" --password-stdin
-          source_image=docker.io/library/golang@sha256:7cc3189dae5bcd44531e89cc958eec136e6a2f3aa6d5fc84c61b73fa25727c13
-          target_image=ghcr.io/yinjiayi/k3s-golang-cross:1.20.12-alpine3.18-amd64.1
-          docker pull --platform linux/amd64 "${source_image}"
-          test "$(docker image inspect --format '{{.Architecture}}' "${source_image}")" = amd64
-          docker tag "${source_image}" "${target_image}"
-          docker push "${target_image}"
+
+          mirror_image() {
+            local architecture=$1
+            local source_image=$2
+            local target_image=$3
+
+            skopeo copy --retry-times 5 \
+              --override-os linux --override-arch "${architecture}" \
+              "docker://${source_image}" "docker://${target_image}"
+            test "$(skopeo inspect --override-os linux \
+              --override-arch "${architecture}" \
+              --format '{{.Architecture}}' "docker://${target_image}")" \
+              = "${architecture}"
+          }
+
+          mirror_image amd64 \
+            docker.io/library/golang@sha256:7cc3189dae5bcd44531e89cc958eec136e6a2f3aa6d5fc84c61b73fa25727c13 \
+            ${GHCR_NAMESPACE}/k3s-golang-cross:1.20.12-alpine3.18-amd64.1
+          mirror_image riscv64 \
+            docker.io/library/alpine@${ALPINE_RISCV64_DIGEST} \
+            ${GHCR_NAMESPACE}/k3s-alpine:3.20-riscv64.1
+          mirror_image riscv64 \
+            docker.io/library/golang@${GOLANG_1_23_RISCV64_DIGEST} \
+            ${GHCR_NAMESPACE}/k3s-golang:1.23-alpine3.20-riscv64.1
+          mirror_image riscv64 \
+            docker.io/riscv64/busybox@${BUSYBOX_RISCV64_DIGEST} \
+            ${GHCR_NAMESPACE}/k3s-busybox:${BUSYBOX_VERSION}-riscv64.1
+          mirror_image riscv64 \
+            ghcr.io/go-riscv/distroless/static-unstable@${DISTROLESS_STATIC_RISCV64_DIGEST} \
+            ${GHCR_NAMESPACE}/k3s-distroless-static:unstable-riscv64.1
+          mirror_image riscv64 \
+            registry.cn-beijing.aliyuncs.com/yunionio/alpine-build@${CLOUDPODS_ALPINE_BUILD_RISCV64_DIGEST} \
+            ${GHCR_NAMESPACE}/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1
 
   build:
-    needs: cross-build-base
+    needs: mirror-build-bases
     runs-on: [self-hosted, linux, riscv64, openeuler-24.03-riscv64]
     timeout-minutes: 180
     steps:

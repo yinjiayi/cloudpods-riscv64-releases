@@ -41,8 +41,9 @@ download_checked() {
 }
 
 dnf install -y \
-    binutils curl file gcc gcc-c++ glib2-devel gnupg2 libffi-devel make \
-    ninja-build pkgconf-pkg-config python3 tar xz zlib-devel zstd
+    binutils buildah curl file gcc gcc-c++ git glib2-devel gnupg2 jq \
+    libffi-devel make ninja-build pkgconf-pkg-config python3 skopeo tar xz \
+    zlib-devel zstd
 install -d -m 0755 "${cache_dir}" "${bootstrap_root}/src"
 
 qemu_archive=${cache_dir}/qemu-${ACTION_RUNNER_QEMU_VERSION}.tar.xz
@@ -198,33 +199,63 @@ if [[ -f ${runner_jsonnet_backup} ]]; then
         | sha256sum --check
 fi
 
-runner_runtimeconfig=${runner_root}/bin/Runner.Listener.runtimeconfig.json
-runner_runtimeconfig_backup=${runner_runtimeconfig}.upstream
-runner_runtimeconfig_sha=$(sha256sum "${runner_runtimeconfig}" | awk '{print $1}')
-case ${runner_runtimeconfig_sha} in
-    "${ACTION_RUNNER_RUNTIMECONFIG_UPSTREAM_SHA256}")
-        install -m 0644 "${runner_runtimeconfig}" "${runner_runtimeconfig_backup}"
+runner_runtimeconfig_upstream=${cache_dir}/Runner.runtimeconfig.json.upstream
+if [[ ! -f ${runner_runtimeconfig_upstream} ]]; then
+    runner_runtimeconfig_upstream_tmp=$(mktemp "${runner_runtimeconfig_upstream}.XXXXXX")
+    tar -xOf "${runner_archive}" ./bin/Runner.Listener.runtimeconfig.json \
+        > "${runner_runtimeconfig_upstream_tmp}"
+    echo "${ACTION_RUNNER_RUNTIMECONFIG_UPSTREAM_SHA256}  ${runner_runtimeconfig_upstream_tmp}" \
+        | sha256sum --check
+    install -m 0644 "${runner_runtimeconfig_upstream_tmp}" \
+        "${runner_runtimeconfig_upstream}"
+    rm -f -- "${runner_runtimeconfig_upstream_tmp}"
+fi
+echo "${ACTION_RUNNER_RUNTIMECONFIG_UPSTREAM_SHA256}  ${runner_runtimeconfig_upstream}" \
+    | sha256sum --check
+
+# Listener handles registration, Worker evaluates and executes jobs, and
+# PluginHost handles plugin steps.  Each is a separate .NET application and
+# therefore needs the same AppContext compatibility switches.
+runner_runtimeconfig_processes=(Runner.Listener Runner.Worker Runner.PluginHost)
+for runner_process in "${runner_runtimeconfig_processes[@]}"; do
+    runner_runtimeconfig=${runner_root}/bin/${runner_process}.runtimeconfig.json
+    runner_runtimeconfig_backup=${runner_runtimeconfig}.upstream
+    runner_runtimeconfig_sha=$(sha256sum "${runner_runtimeconfig}" | awk '{print $1}')
+    case ${runner_runtimeconfig_sha} in
+        "${ACTION_RUNNER_RUNTIMECONFIG_UPSTREAM_SHA256}"|\
+        "${ACTION_RUNNER_RUNTIMECONFIG_INTERPRETED_ONLY_SHA256}"|\
+        "${ACTION_RUNNER_RUNTIMECONFIG_COMPAT_SHA256}")
+            ;;
+        *)
+            echo "unexpected ${runner_process} runtimeconfig SHA-256: ${runner_runtimeconfig_sha}" >&2
+            exit 1
+            ;;
+    esac
+
+    if [[ ! -f ${runner_runtimeconfig_backup} ]]; then
+        install -m 0644 "${runner_runtimeconfig_upstream}" \
+            "${runner_runtimeconfig_backup}"
+    fi
+    echo "${ACTION_RUNNER_RUNTIMECONFIG_UPSTREAM_SHA256}  ${runner_runtimeconfig_backup}" \
+        | sha256sum --check
+
+    if [[ ${runner_runtimeconfig_sha} != ${ACTION_RUNNER_RUNTIMECONFIG_COMPAT_SHA256} ]]; then
         runner_runtimeconfig_tmp=$(mktemp "${runner_runtimeconfig}.XXXXXX")
         sed '/"configProperties": {/a\      "Switch.System.Reflection.ForceInterpretedInvoke": true,' \
-            "${runner_runtimeconfig}" > "${runner_runtimeconfig_tmp}"
+            "${runner_runtimeconfig_upstream}" \
+            | sed '/"Switch.System.Reflection.ForceInterpretedInvoke": true,/a\      "System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported": false,' \
+                > "${runner_runtimeconfig_tmp}"
         echo "${ACTION_RUNNER_RUNTIMECONFIG_COMPAT_SHA256}  ${runner_runtimeconfig_tmp}" \
             | sha256sum --check
         chmod 0644 "${runner_runtimeconfig_tmp}"
         mv "${runner_runtimeconfig_tmp}" "${runner_runtimeconfig}"
-        ;;
-    "${ACTION_RUNNER_RUNTIMECONFIG_COMPAT_SHA256}")
-        ;;
-    *)
-        echo "unexpected Runner runtimeconfig SHA-256: ${runner_runtimeconfig_sha}" >&2
-        exit 1
-        ;;
-esac
-grep -Fq '"Switch.System.Reflection.ForceInterpretedInvoke": true' \
-    "${runner_runtimeconfig}"
-if [[ -f ${runner_runtimeconfig_backup} ]]; then
-    echo "${ACTION_RUNNER_RUNTIMECONFIG_UPSTREAM_SHA256}  ${runner_runtimeconfig_backup}" \
-        | sha256sum --check
-fi
+    fi
+
+    grep -Fq '"Switch.System.Reflection.ForceInterpretedInvoke": true' \
+        "${runner_runtimeconfig}"
+    grep -Fq '"System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported": false' \
+        "${runner_runtimeconfig}"
+done
 
 binfmt_conf=/etc/binfmt.d/qemu-x86_64-cloudpods.conf
 binfmt_tmp=$(mktemp /etc/binfmt.d/.qemu-x86_64-cloudpods.XXXXXX)
