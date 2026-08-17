@@ -15,7 +15,7 @@ RUN apk add --no-cache curl ca-certificates
 RUN curl --fail --location \
       "https://get.helm.sh/helm-${HELM_VERSION}-linux-riscv64.tar.gz" \
       --output /tmp/helm.tar.gz && \
-    echo "${HELM_RISCV64_SHA256}  /tmp/helm.tar.gz" | sha256sum --check && \
+    echo "${HELM_RISCV64_SHA256}  /tmp/helm.tar.gz" | sha256sum -c && \
     tar xvzf /tmp/helm.tar.gz --strip-components=1 -C /usr/bin
 COPY --from=source /src/entry /usr/bin/entry
 
