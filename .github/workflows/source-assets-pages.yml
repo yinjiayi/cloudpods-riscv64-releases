@@ -36,6 +36,7 @@ jobs:
           done
           cp source-assets/SHA256SUMS source-assets/index.html \
             site/source-assets/
+          cp pages/index.html site/index.html
           (
             cd site/source-assets
             sha256sum --check SHA256SUMS

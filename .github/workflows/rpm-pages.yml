@@ -93,6 +93,7 @@ jobs:
               "${release_base}/${asset}" --output "${source_site}/${asset}"
           done
           cp source-assets/SHA256SUMS source-assets/index.html "${source_site}/"
+          cp pages/index.html validated/site/index.html
           (
             cd "${source_site}"
             sha256sum --check SHA256SUMS
