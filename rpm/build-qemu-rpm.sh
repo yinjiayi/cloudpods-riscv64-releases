@@ -56,7 +56,16 @@ install -d -m 0755 "${build_dir}"
         --disable-werror
 )
 ninja -C "${build_dir}" -j "$(nproc)"
-ninja -C "${build_dir}" test
+# QEMU's qtest and qcow2 suites use short defaults tuned for mainstream
+# architectures.  They complete successfully on native RISC-V but a few need
+# more than 120/180 seconds on the release VM, so retain the full suite with a
+# larger timeout instead of skipping those tests.
+"${build_dir}/pyvenv/bin/meson" test \
+    -C "${build_dir}" \
+    --no-rebuild \
+    --no-stdsplit \
+    --print-errorlogs \
+    --timeout-multiplier 4
 
 install -d -m 0755 "${package_root}"
 DESTDIR="${package_root}" ninja -C "${build_dir}" install
