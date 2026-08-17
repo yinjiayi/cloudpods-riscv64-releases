@@ -18,7 +18,7 @@ of this delivery.
 | Deliverable | Location |
 | --- | --- |
 | K3s binary and air-gap bundle | `github.com/yinjiayi/k3s/releases` |
-| Pinned native-build source archives | `github.com/yinjiayi/cloudpods-riscv64-releases/releases` |
+| Pinned native-build source archives | `yinjiayi.github.io/cloudpods-riscv64-releases/source-assets/` |
 | K3s system images | `ghcr.io/yinjiayi/k3s-*` |
 | Cloudpods runtime images | `ghcr.io/yinjiayi/*` |
 | ocboot build image | `ghcr.io/yinjiayi/ocboot` |
@@ -80,7 +80,8 @@ token is stored in repository secrets.
    Runner version, then install and register the RISC-V build runner.
 2. Export the pinned Cloudpods and ocboot commits, verify
    `source-assets/SHA256SUMS`, and publish them under the source-asset release
-   tag recorded in `versions.env`.
+   tag recorded in `versions.env`; then run `Publish native-build source assets
+   to Pages` so the RISC-V runner uses the resumable Pages mirror.
 3. Run `Build K3s RISC-V images`.
 4. Confirm each new package is Public in GitHub package settings; change it if
    the package did not inherit visibility from the public source repository.

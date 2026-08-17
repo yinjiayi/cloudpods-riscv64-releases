@@ -1,0 +1,61 @@
+name: Publish native-build source assets to Pages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'source-assets-pages-*'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download and verify pinned source assets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          source versions.env
+          release_base=https://github.com/yinjiayi/cloudpods-riscv64-releases/releases/download/${CLOUDPODS_SOURCE_ASSET_TAG}
+          install -d -m 0755 site/source-assets
+          for asset in "${CLOUDPODS_SOURCE_ARCHIVE}" "${OCBOOT_SOURCE_ARCHIVE}"; do
+            curl --fail --location --retry 10 --retry-all-errors \
+              --connect-timeout 20 --max-time 600 \
+              "${release_base}/${asset}" \
+              --output "site/source-assets/${asset}"
+          done
+          cp source-assets/SHA256SUMS source-assets/index.html \
+            site/source-assets/
+          (
+            cd site/source-assets
+            sha256sum --check SHA256SUMS
+          )
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy:
+    needs: stage
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

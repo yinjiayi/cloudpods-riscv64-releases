@@ -68,7 +68,7 @@ clone_exact() {
 extract_cloudpods_source_asset() {
     local destination=$1
     local source_archive=${work_root}/${CLOUDPODS_SOURCE_ARCHIVE}
-    local source_url=https://github.com/yinjiayi/cloudpods-riscv64-releases/releases/download/${CLOUDPODS_SOURCE_ASSET_TAG}/${CLOUDPODS_SOURCE_ARCHIVE}
+    local source_url=${SOURCE_ASSET_PAGE_BASE_URL}/${CLOUDPODS_SOURCE_ARCHIVE}
 
     curl --fail --location --retry 10 --retry-all-errors \
         --continue-at - --connect-timeout 20 --max-time 1800 \

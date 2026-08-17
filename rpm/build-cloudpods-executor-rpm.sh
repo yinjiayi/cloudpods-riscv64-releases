@@ -13,7 +13,7 @@ output_dir=${repo_root}/dist/rpm/riscv64
 builder_image=${GHCR_NAMESPACE}/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1
 
 source_archive=${work_root}/${CLOUDPODS_SOURCE_ARCHIVE}
-source_url=https://github.com/yinjiayi/cloudpods-riscv64-releases/releases/download/${CLOUDPODS_SOURCE_ASSET_TAG}/${CLOUDPODS_SOURCE_ARCHIVE}
+source_url=${SOURCE_ASSET_PAGE_BASE_URL}/${CLOUDPODS_SOURCE_ARCHIVE}
 curl --fail --location --retry 10 --retry-all-errors \
     --continue-at - --connect-timeout 20 --max-time 1800 \
     "${source_url}" \
