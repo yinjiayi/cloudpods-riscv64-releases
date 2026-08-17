@@ -94,6 +94,8 @@ jobs:
           done
           cp source-assets/SHA256SUMS source-assets/index.html "${source_site}/"
           cp pages/index.html validated/site/index.html
+          cp pages/rpm-index.html \
+            validated/site/rpm/openEuler/24.03-LTS-SP3/riscv64/index.html
           (
             cd "${source_site}"
             sha256sum --check SHA256SUMS

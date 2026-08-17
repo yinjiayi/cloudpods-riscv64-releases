@@ -75,6 +75,8 @@ jobs:
           install -d -m 0755 site
           if [[ ${HAS_VALIDATED_RPMS} == true ]]; then
             cp -a validated/site/. site/
+            cp pages/rpm-index.html \
+              site/rpm/openEuler/24.03-LTS-SP3/riscv64/index.html
           fi
           release_base=https://github.com/yinjiayi/cloudpods-riscv64-releases/releases/download/${CLOUDPODS_SOURCE_ASSET_TAG}
           install -d -m 0755 site/source-assets
