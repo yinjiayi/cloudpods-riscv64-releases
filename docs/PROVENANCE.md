@@ -6,7 +6,7 @@ checked against SHA-256 digests before a release is published.
 | Component | Source |
 | --- | --- |
 | K3s | `yinjiayi/k3s` RISC-V branch based on `k3s-io/k3s` tag `v1.28.5+k3s1` |
-| ocboot | `yinjiayi/ocboot` RISC-V branch based on Cloudpods `v4.0.3` |
+| ocboot | `yinjiayi/ocboot` RISC-V branch based on Cloudpods `v4.0.3`; its RISC-V image uses the measured reachable Aliyun Alpine mirror |
 | Native-build source assets | exact Cloudpods and ocboot commits exported once, published as release assets, mirrored through GitHub Pages, and pinned by SHA-256 so slow links can resume without changing source |
 | K3s root filesystem | `k3s-io/k3s-root` release `v0.13.0` |
 | CoreDNS | `coredns/coredns` tag `v1.11.1` |
