@@ -7,6 +7,7 @@ checked against SHA-256 digests before a release is published.
 | --- | --- |
 | K3s | `yinjiayi/k3s` RISC-V branch based on `k3s-io/k3s` tag `v1.28.5+k3s1` |
 | ocboot | `yinjiayi/ocboot` RISC-V branch based on Cloudpods `v4.0.3` |
+| Native-build source assets | exact Cloudpods and ocboot commits exported once, published as release assets, and pinned by SHA-256 so slow links can resume without changing source |
 | K3s root filesystem | `k3s-io/k3s-root` release `v0.13.0` |
 | CoreDNS | `coredns/coredns` tag `v1.11.1` |
 | Traefik | `traefik/traefik` tag `v2.10.5` |
@@ -22,7 +23,8 @@ checked against SHA-256 digests before a release is published.
 | Runner sysroot | signed Canonical Ubuntu 22.04 OCI build `20260810`, SHA-256 pinned |
 | Runner ICU | Ubuntu Jammy `libicu70` package `70.1-2`, SHA-256 pinned |
 | Open vSwitch | openEuler 24.03 LTS SP3 SRPM plus the checked-in GCC 14 patch |
-| Cloudpods executor | `yunionio/cloudpods` tag `v4.0.3` plus the checked-in flag parser patch |
+| Cloudpods source asset | exact `yinjiayi/cloudpods` commit `819faf4e43c30ecb78eb3201abfd1212d99f7945` |
+| Cloudpods executor | the pinned Cloudpods source asset plus the checked-in flag parser patch |
 | RISC-V UEFI | openEuler 24.03 LTS SP3 `RISCV_VIRT_*_RVA20.fd`, pinned by SHA-256 |
 
 `versions.env` contains the full source commits, SHA-256 checksums, and QEMU

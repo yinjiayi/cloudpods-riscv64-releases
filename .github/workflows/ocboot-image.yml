@@ -1,0 +1,101 @@
+name: Build and publish ocboot RISC-V image
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'ocboot-image-riscv64-*'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: [self-hosted, linux, riscv64, openeuler-24.03-riscv64]
+    timeout-minutes: 120
+    steps:
+      - name: Fetch pinned workflow source with native curl
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          source_root=${RUNNER_TEMP}/cloudpods-riscv64-releases-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+          source_archive=${source_root}.tar.gz
+          install -d -m 0755 "${source_root}"
+          curl --fail --location --retry 10 --retry-all-errors \
+            --connect-timeout 20 --max-time 600 \
+            --output "${source_archive}" \
+            "https://codeload.github.com/${GITHUB_REPOSITORY}/tar.gz/${GITHUB_SHA}"
+          tar -C "${source_root}" --strip-components=1 -xzf "${source_archive}"
+          test -f "${source_root}/versions.env"
+          echo "RELEASE_SOURCE_ROOT=${source_root}" >> "${GITHUB_ENV}"
+
+      - name: Fetch and verify the pinned ocboot source asset
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          source "${RELEASE_SOURCE_ROOT}/versions.env"
+          asset_root=${RUNNER_TEMP}/ocboot-source-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+          source_archive=${asset_root}/${OCBOOT_SOURCE_ARCHIVE}
+          source_url=https://github.com/yinjiayi/cloudpods-riscv64-releases/releases/download/${CLOUDPODS_SOURCE_ASSET_TAG}/${OCBOOT_SOURCE_ARCHIVE}
+          install -d -m 0755 "${asset_root}/src"
+          curl --fail --location --retry 10 --retry-all-errors \
+            --continue-at - --connect-timeout 20 --max-time 1800 \
+            "${source_url}" --output "${source_archive}"
+          echo "${OCBOOT_SOURCE_ARCHIVE_SHA256}  ${source_archive}" | \
+            sha256sum --check
+          tar -C "${asset_root}/src" --strip-components=1 \
+            -xzf "${source_archive}"
+          test -f "${asset_root}/src/Dockerfile.riscv64"
+          test -x "${asset_root}/src/ocboot.sh"
+          echo "OCBOOT_SOURCE_ROOT=${asset_root}/src" >> "${GITHUB_ENV}"
+
+      - name: Build and publish the native RISC-V image
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          source "${RELEASE_SOURCE_ROOT}/versions.env"
+          image=ghcr.io/yinjiayi/ocboot:${OCBOOT_VERSION}
+          verifier=ocboot-image-verifier-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+          cleanup() {
+            buildah rm "${verifier}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          test "$(uname -m)" = riscv64
+          printf '%s' "${GHCR_TOKEN}" | buildah login ghcr.io \
+            --username "${GITHUB_ACTOR}" --password-stdin
+          buildah bud \
+            --arch riscv64 \
+            --label "org.opencontainers.image.source=https://github.com/yinjiayi/ocboot" \
+            --label "org.opencontainers.image.revision=${OCBOOT_SOURCE_COMMIT}" \
+            --file "${OCBOOT_SOURCE_ROOT}/Dockerfile.riscv64" \
+            --tag "${image}" "${OCBOOT_SOURCE_ROOT}"
+          test "$(buildah inspect --format '{{.OCIv1.Architecture}}' "${image}")" = riscv64
+          buildah from --name "${verifier}" "${image}" >/dev/null
+          buildah run "${verifier}" -- sh -ec '
+            test "$(uname -m)" = riscv64
+            test "${K3S_AIRGAP_DIR}" = /ocboot/airgap_assets
+            python3 --version
+            ansible --version
+          '
+          buildah push "${image}" "docker://${image}"
+
+  verify-public:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify anonymous RISC-V pull
+        run: |
+          set -Eeuo pipefail
+          source versions.env
+          sudo apt-get update
+          sudo apt-get install -y jq skopeo
+          metadata=$(skopeo inspect --override-os linux --override-arch riscv64 \
+            "docker://ghcr.io/yinjiayi/ocboot:${OCBOOT_VERSION}")
+          test "$(jq -r .Architecture <<<"${metadata}")" = riscv64
+          jq -r .Digest <<<"${metadata}" | grep -Eq '^sha256:[0-9a-f]{64}$'

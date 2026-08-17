@@ -65,6 +65,21 @@ clone_exact() {
     rm -f "${source_archive}"
 }
 
+extract_cloudpods_source_asset() {
+    local destination=$1
+    local source_archive=${work_root}/${CLOUDPODS_SOURCE_ARCHIVE}
+    local source_url=https://github.com/yinjiayi/cloudpods-riscv64-releases/releases/download/${CLOUDPODS_SOURCE_ASSET_TAG}/${CLOUDPODS_SOURCE_ARCHIVE}
+
+    curl --fail --location --retry 10 --retry-all-errors \
+        --continue-at - --connect-timeout 20 --max-time 1800 \
+        "${source_url}" --output "${source_archive}"
+    echo "${CLOUDPODS_SOURCE_ARCHIVE_SHA256}  ${source_archive}" | \
+        sha256sum --check
+    install -d -m 0755 "${destination}"
+    tar -C "${destination}" --strip-components=1 -xzf "${source_archive}"
+    rm -f "${source_archive}"
+}
+
 apply_source_patch() {
     local tree=$1
     local patch_file=$2
@@ -100,10 +115,7 @@ remove_builder() {
 
 mirror_dependencies
 
-clone_exact \
-    https://github.com/yinjiayi/cloudpods.git \
-    "${CLOUDPODS_SOURCE_REF}" "${CLOUDPODS_SOURCE_COMMIT}" \
-    "${source_dir}/cloudpods"
+extract_cloudpods_source_asset "${source_dir}/cloudpods"
 clone_exact \
     https://github.com/yunionio/onecloud-operator.git \
     "${ONECLOUD_OPERATOR_SOURCE_REF}" "${ONECLOUD_OPERATOR_SOURCE_COMMIT}" \

@@ -18,8 +18,10 @@ of this delivery.
 | Deliverable | Location |
 | --- | --- |
 | K3s binary and air-gap bundle | `github.com/yinjiayi/k3s/releases` |
+| Pinned native-build source archives | `github.com/yinjiayi/cloudpods-riscv64-releases/releases` |
 | K3s system images | `ghcr.io/yinjiayi/k3s-*` |
 | Cloudpods runtime images | `ghcr.io/yinjiayi/*` |
+| ocboot build image | `ghcr.io/yinjiayi/ocboot` |
 | openEuler RISC-V RPMs | `yinjiayi.github.io/cloudpods-riscv64-releases/rpm/openEuler/24.03-LTS-SP3/riscv64/` |
 
 The complete version and provenance lock is in `versions.env`. Build commands
@@ -76,22 +78,25 @@ token is stored in repository secrets.
 
 1. Run `Publish Actions Runner RISC-V compatibility asset` once for the pinned
    Runner version, then install and register the RISC-V build runner.
-2. Run `Build K3s RISC-V images`.
-3. Confirm each new package is Public in GitHub package settings; change it if
+2. Export the pinned Cloudpods and ocboot commits, verify
+   `source-assets/SHA256SUMS`, and publish them under the source-asset release
+   tag recorded in `versions.env`.
+3. Run `Build K3s RISC-V images`.
+4. Confirm each new package is Public in GitHub package settings; change it if
    the package did not inherit visibility from the public source repository.
-4. Run `scripts/verify-ghcr-public.sh images/k3s-images.lock` without credentials.
-5. Tag the K3s fork with `v1.28.5+k3s1-riscv64.3`.
-6. Run `Build and publish Cloudpods RISC-V images`, make any new packages
+5. Run `scripts/verify-ghcr-public.sh images/k3s-images.lock` without credentials.
+6. Tag the K3s fork with `v1.28.5+k3s1-riscv64.3`.
+7. Run `Build and publish Cloudpods RISC-V images`, make any new packages
    public, and verify `images/cloudpods-images.lock` the same way.
-7. Run `Build openEuler RISC-V RPMs` and note its workflow run ID.
-8. Download that run's RPM artifact to the physical RISC-V host and run
+8. Run `Build openEuler RISC-V RPMs` and note its workflow run ID.
+9. Download that run's RPM artifact to the physical RISC-V host and run
    `sudo rpm/verify-qemu-kvm-rpm.sh PATH_TO_QEMU_RPM`.
-9. Copy `rpm/kvm-validation.env.example` to `rpm/kvm-validation.env`, record the
+10. Copy `rpm/kvm-validation.env.example` to `rpm/kvm-validation.env`, record the
    original build run ID and emitted `KVM_VALIDATION_SHA256`, commit it, then
    push an `rpm-pages-riscv64-*` tag. The publisher downloads and checks that
    exact artifact; it does not rebuild it. Manual dispatch remains available.
-10. Tag and publish the ocboot RISC-V branch, then verify its GHCR package is
-    public.
+11. Tag the ocboot RISC-V branch, run `Build and publish ocboot RISC-V image`
+    from this release repository, then verify its GHCR package is public.
 
 Packages linked to this public source repository currently inherit Public
 visibility. Always confirm the package settings and run the anonymous

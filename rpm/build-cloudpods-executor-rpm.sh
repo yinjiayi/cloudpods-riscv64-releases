@@ -12,11 +12,14 @@ rpmbuild_root=${work_root}/rpmbuild
 output_dir=${repo_root}/dist/rpm/riscv64
 builder_image=${GHCR_NAMESPACE}/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1
 
-source_archive=${work_root}/cloudpods.tar.gz
+source_archive=${work_root}/${CLOUDPODS_SOURCE_ARCHIVE}
+source_url=https://github.com/yinjiayi/cloudpods-riscv64-releases/releases/download/${CLOUDPODS_SOURCE_ASSET_TAG}/${CLOUDPODS_SOURCE_ARCHIVE}
 curl --fail --location --retry 10 --retry-all-errors \
-    --connect-timeout 20 --max-time 600 \
-    "https://codeload.github.com/yunionio/cloudpods/tar.gz/${CLOUDPODS_VERSION}" \
+    --continue-at - --connect-timeout 20 --max-time 1800 \
+    "${source_url}" \
     --output "${source_archive}"
+echo "${CLOUDPODS_SOURCE_ARCHIVE_SHA256}  ${source_archive}" | \
+    sha256sum --check
 install -d -m 0755 "${source_dir}"
 tar -C "${source_dir}" --strip-components=1 -xzf "${source_archive}"
 git -C "${source_dir}" apply \
