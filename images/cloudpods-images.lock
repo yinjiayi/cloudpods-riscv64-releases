@@ -1,6 +1,6 @@
 ghcr.io/yinjiayi/cloudpods:v4.0.3-riscv64.3
 ghcr.io/yinjiayi/onecloud-operator:v4.0.3-riscv64.2
-ghcr.io/yinjiayi/web:v4.0.3-riscv64-ui2
+ghcr.io/yinjiayi/cloudpods-web:v4.0.3-riscv64-ui2
 ghcr.io/yinjiayi/etcd:3.5.24-riscv64.1
 ghcr.io/yinjiayi/host-image:v1.0.8-riscv64.1
 ghcr.io/yinjiayi/host-health:v0.0.4-riscv64.1

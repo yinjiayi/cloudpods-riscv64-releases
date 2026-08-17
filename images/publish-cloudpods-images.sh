@@ -2,7 +2,6 @@
 set -Eeuo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-source "${repo_root}/versions.env"
 map_file=${repo_root}/images/cloudpods-source-map.tsv
 lock_file=${repo_root}/images/cloudpods-images.lock
 output_dir=${repo_root}/dist
@@ -22,27 +21,10 @@ while IFS=$'\t' read -r source_image target_image; do
         buildah pull --arch riscv64 "${source_image}"
     fi
     [[ $(buildah inspect --format '{{.OCIv1.Architecture}}' "${source_image}") == riscv64 ]]
-    if [[ ${target_image} == "ghcr.io/yinjiayi/web:${CLOUDPODS_WEB_IMAGE_VERSION}" ]]; then
-        # The web package is linked to yinjiayi/dashboard, so GitHub's
-        # repository-scoped GITHUB_TOKEN correctly rejects writes from this
-        # release repository.  The dashboard workflow owns publication; this
-        # workflow independently verifies its pinned provenance before adding
-        # the image to the release digest lock.
-        remote_inspect=$(skopeo inspect \
-            --override-os linux --override-arch riscv64 \
-            "docker://${target_image}")
-        [[ $(jq -r .Architecture <<<"${remote_inspect}") == riscv64 ]]
-        [[ $(jq -r '.Labels["org.opencontainers.image.revision"]' \
-            <<<"${remote_inspect}") == "${DASHBOARD_SOURCE_COMMIT}" ]]
-        [[ $(jq -r '.Labels["org.opencontainers.image.version"]' \
-            <<<"${remote_inspect}") == "${CLOUDPODS_WEB_IMAGE_VERSION}" ]]
-        digest=$(jq -r .Digest <<<"${remote_inspect}")
-    else
-        buildah tag "${source_image}" "${target_image}"
-        buildah push "${target_image}" "docker://${target_image}"
-        digest=$(skopeo inspect --override-os linux --override-arch riscv64 \
-            "docker://${target_image}" | jq -r .Digest)
-    fi
+    buildah tag "${source_image}" "${target_image}"
+    buildah push "${target_image}" "docker://${target_image}"
+    digest=$(skopeo inspect --override-os linux --override-arch riscv64 \
+        "docker://${target_image}" | jq -r .Digest)
     [[ ${digest} == sha256:* ]]
     printf '%s@%s\n' "${target_image}" "${digest}" | tee -a "${output_file}"
 done < "${map_file}"

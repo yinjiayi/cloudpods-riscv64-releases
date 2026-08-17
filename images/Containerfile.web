@@ -2,7 +2,7 @@ FROM ghcr.io/yinjiayi/cloudpods-web-base:v4.0.3-riscv64.1
 
 ARG SOURCE_COMMIT
 ARG VERSION
-LABEL org.opencontainers.image.source="https://github.com/yinjiayi/dashboard" \
+LABEL org.opencontainers.image.source="https://github.com/yinjiayi/cloudpods-riscv64-releases" \
       org.opencontainers.image.revision="${SOURCE_COMMIT}" \
       org.opencontainers.image.version="${VERSION}"
 
