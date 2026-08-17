@@ -34,7 +34,27 @@ printf '%s\n' \
     'repo_gpgcheck=0' \
     > "${repo_root}/site/cloudpods-riscv64.repo"
 
-createrepo_c --checkts "${site_dir}"
+test -s "${site_dir}/repodata/repomd.xml"
+xmllint --noout "${site_dir}/repodata/repomd.xml"
+repo_id=cloudpods-riscv64-build-verify
+repo_packages=$(
+    dnf -q --refresh \
+        --disablerepo='*' \
+        --repofrompath="${repo_id},file://${site_dir}" \
+        --enablerepo="${repo_id}" \
+        repoquery --available --qf '%{name}' \
+        cloudpods-executor \
+        cloudpods-riscv-firmware \
+        openvswitch \
+        qemu-riscv-cloudpods | sort -u
+)
+for package_name in \
+    cloudpods-executor \
+    cloudpods-riscv-firmware \
+    openvswitch \
+    qemu-riscv-cloudpods; do
+    grep -Fxq "${package_name}" <<<"${repo_packages}"
+done
 (
     cd "${site_dir}"
     sha256sum --check SHA256SUMS

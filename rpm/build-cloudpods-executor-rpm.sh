@@ -14,10 +14,20 @@ builder_image=${GHCR_NAMESPACE}/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv6
 
 source_archive=${work_root}/${CLOUDPODS_SOURCE_ARCHIVE}
 source_url=${SOURCE_ASSET_PAGE_BASE_URL}/${CLOUDPODS_SOURCE_ARCHIVE}
-curl --fail --location --retry 10 --retry-all-errors \
-    --continue-at - --connect-timeout 20 --max-time 1800 \
-    "${source_url}" \
-    --output "${source_archive}"
+source_cache=${CLOUDPODS_SOURCE_CACHE_DIR:-}
+if [[ -n ${source_cache} && -f ${source_cache}/${CLOUDPODS_SOURCE_ARCHIVE} ]] && \
+    echo "${CLOUDPODS_SOURCE_ARCHIVE_SHA256}  ${source_cache}/${CLOUDPODS_SOURCE_ARCHIVE}" | \
+        sha256sum --check --status; then
+    echo "Using verified Cloudpods source cache: ${source_cache}/${CLOUDPODS_SOURCE_ARCHIVE}"
+    install -m 0644 \
+        "${source_cache}/${CLOUDPODS_SOURCE_ARCHIVE}" \
+        "${source_archive}"
+else
+    curl --fail --location --retry 10 --retry-all-errors \
+        --continue-at - --connect-timeout 20 --max-time 1800 \
+        "${source_url}" \
+        --output "${source_archive}"
+fi
 echo "${CLOUDPODS_SOURCE_ARCHIVE_SHA256}  ${source_archive}" | \
     sha256sum --check
 install -d -m 0755 "${source_dir}"
