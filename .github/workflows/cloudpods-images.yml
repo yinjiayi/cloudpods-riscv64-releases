@@ -29,9 +29,11 @@ jobs:
           test "$(git -C build-input/dashboard rev-parse HEAD)" = \
             "${DASHBOARD_SOURCE_COMMIT}"
           cd build-input/dashboard
-          npm ci --legacy-peer-deps --no-audit --no-fund
-          npm run test:unit -- tests/unit/compute-arch.spec.js --runInBand
-          npm run build
+          npm install --global yarn@1.22.22 --no-audit --no-fund
+          yarn install --frozen-lockfile --non-interactive \
+            --network-timeout 600000
+          yarn test:unit tests/unit/compute-arch.spec.js --runInBand
+          yarn build
           grep -R -q riscv64 dist/js
 
       - name: Download and verify the pinned K3s RISC-V release
