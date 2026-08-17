@@ -47,19 +47,38 @@ clone_exact() {
     local repository=$1
     local source_ref=$2
     local source_commit=$3
-    local destination=$4
+    local source_sha256=$4
+    local destination=$5
+    local cache_archive
+    local cache_dir=${CLOUDPODS_SOURCE_CACHE_DIR:-}
     local repository_path
     local source_archive
+    local source_name
 
     repository_path=${repository#https://github.com/}
     repository_path=${repository_path%.git}
     [[ ${repository_path} != "${repository}" && ${repository_path} == */* ]]
     [[ -n ${source_ref} ]]
-    source_archive=${work_root}/$(basename "${destination}").tar.gz
-    curl --fail --location --retry 10 --retry-all-errors \
-        --connect-timeout 20 --max-time 600 \
-        "https://codeload.github.com/${repository_path}/tar.gz/${source_commit}" \
-        --output "${source_archive}"
+    [[ ${source_sha256} =~ ^[0-9a-f]{64}$ ]]
+    source_name=$(basename "${repository_path}")
+    source_archive=${work_root}/${source_name}-${source_commit}.tar.gz
+    cache_archive=${cache_dir:+${cache_dir}/${source_name}-${source_commit}.tar.gz}
+    if [[ -n ${cache_archive} && -f ${cache_archive} ]] && \
+        echo "${source_sha256}  ${cache_archive}" | sha256sum --check --status; then
+        echo "Using verified source cache: ${cache_archive}"
+        install -m 0644 "${cache_archive}" "${source_archive}"
+    else
+        curl --fail --location --retry 10 --retry-all-errors \
+            --connect-timeout 20 --max-time 600 \
+            "https://codeload.github.com/${repository_path}/tar.gz/${source_commit}" \
+            --output "${source_archive}"
+    fi
+    echo "${source_sha256}  ${source_archive}" | sha256sum --check
+    if [[ -n ${cache_archive} ]]; then
+        install -d -m 0755 "${cache_dir}"
+        install -m 0644 "${source_archive}" "${cache_archive}.tmp.${builder_suffix}"
+        mv -f "${cache_archive}.tmp.${builder_suffix}" "${cache_archive}"
+    fi
     install -d -m 0755 "${destination}"
     tar -C "${destination}" --strip-components=1 -xzf "${source_archive}"
     rm -f "${source_archive}"
@@ -67,14 +86,29 @@ clone_exact() {
 
 extract_cloudpods_source_asset() {
     local destination=$1
+    local cache_archive
+    local cache_dir=${CLOUDPODS_SOURCE_CACHE_DIR:-}
     local source_archive=${work_root}/${CLOUDPODS_SOURCE_ARCHIVE}
     local source_url=${SOURCE_ASSET_PAGE_BASE_URL}/${CLOUDPODS_SOURCE_ARCHIVE}
 
-    curl --fail --location --retry 10 --retry-all-errors \
-        --continue-at - --connect-timeout 20 --max-time 1800 \
-        "${source_url}" --output "${source_archive}"
+    cache_archive=${cache_dir:+${cache_dir}/${CLOUDPODS_SOURCE_ARCHIVE}}
+    if [[ -n ${cache_archive} && -f ${cache_archive} ]] && \
+        echo "${CLOUDPODS_SOURCE_ARCHIVE_SHA256}  ${cache_archive}" | \
+            sha256sum --check --status; then
+        echo "Using verified Cloudpods source cache: ${cache_archive}"
+        install -m 0644 "${cache_archive}" "${source_archive}"
+    else
+        curl --fail --location --retry 10 --retry-all-errors \
+            --continue-at - --connect-timeout 20 --max-time 1800 \
+            "${source_url}" --output "${source_archive}"
+    fi
     echo "${CLOUDPODS_SOURCE_ARCHIVE_SHA256}  ${source_archive}" | \
         sha256sum --check
+    if [[ -n ${cache_archive} ]]; then
+        install -d -m 0755 "${cache_dir}"
+        install -m 0644 "${source_archive}" "${cache_archive}.tmp.${builder_suffix}"
+        mv -f "${cache_archive}.tmp.${builder_suffix}" "${cache_archive}"
+    fi
     install -d -m 0755 "${destination}"
     tar -C "${destination}" --strip-components=1 -xzf "${source_archive}"
     rm -f "${source_archive}"
@@ -119,10 +153,12 @@ extract_cloudpods_source_asset "${source_dir}/cloudpods"
 clone_exact \
     https://github.com/yunionio/onecloud-operator.git \
     "${ONECLOUD_OPERATOR_SOURCE_REF}" "${ONECLOUD_OPERATOR_SOURCE_COMMIT}" \
+    "${ONECLOUD_OPERATOR_SOURCE_ARCHIVE_SHA256}" \
     "${source_dir}/onecloud-operator"
 clone_exact \
     https://github.com/yunionio/sdnagent.git \
     "${SDNAGENT_SOURCE_REF}" "${SDNAGENT_SOURCE_COMMIT}" \
+    "${SDNAGENT_SOURCE_ARCHIVE_SHA256}" \
     "${source_dir}/sdnagent"
 
 apply_source_patch \

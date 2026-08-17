@@ -129,6 +129,7 @@ jobs:
 
       - name: Build Cloudpods images from pinned source and publish them
         env:
+          CLOUDPODS_SOURCE_CACHE_DIR: /var/cache/cloudpods-build
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: "${RELEASE_SOURCE_ROOT}/images/build-cloudpods-images.sh"
 
