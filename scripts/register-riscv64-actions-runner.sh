@@ -7,7 +7,7 @@ set -Eeuo pipefail
 }
 : "${ACTIONS_RUNNER_TOKEN:?set a one-time repository runner registration token}"
 
-runner_root=/opt/actions-runner
+runner_root=${ACTIONS_RUNNER_ROOT:-/opt/actions-runner}
 runner_sysroot=/opt/x86_64-runner-sysroot
 runner_url=${ACTIONS_RUNNER_URL:-https://github.com/yinjiayi/cloudpods-riscv64-releases}
 runner_name=${ACTIONS_RUNNER_NAME:-$(hostname -s)}

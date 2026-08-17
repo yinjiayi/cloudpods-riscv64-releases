@@ -14,7 +14,7 @@ release assets, the GHCR image names, and the RPM repository from the
 of this delivery.
 
 Customer deployment steps are in the
-[openEuler RISC-V single-node guide](https://github.com/yinjiayi/ocboot/blob/v4.0.3-riscv64.4/docs/customer-deployment-openeuler-riscv64.md).
+[openEuler RISC-V single-node guide](https://github.com/yinjiayi/ocboot/blob/v4.0.3-riscv64.5/docs/customer-deployment-openeuler-riscv64.md).
 
 ## Release layout
 
