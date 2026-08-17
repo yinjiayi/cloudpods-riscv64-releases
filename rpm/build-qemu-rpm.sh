@@ -48,6 +48,7 @@ install -d -m 0755 "${build_dir}"
         --enable-kvm \
         --enable-vnc \
         --enable-slirp \
+        --disable-rbd \
         --disable-docs \
         --disable-gtk \
         --disable-sdl \
@@ -113,5 +114,15 @@ install -m 0644 "${repo_root}/rpm/SPECS/qemu-riscv-cloudpods.spec" "${rpmbuild_r
 rpmbuild --define "_topdir ${rpmbuild_root}" -ba \
     "${rpmbuild_root}/SPECS/qemu-riscv-cloudpods.spec"
 
-install -m 0644 "${rpmbuild_root}/RPMS/riscv64/"*.rpm "${output_dir}/"
+mapfile -t qemu_rpms < <(
+    find "${rpmbuild_root}/RPMS/riscv64" -maxdepth 1 -type f \
+        -name 'qemu-riscv-cloudpods-*.riscv64.rpm' | sort
+)
+[[ ${#qemu_rpms[@]} -eq 1 ]]
+if rpm -qp --requires "${qemu_rpms[0]}" | grep -Eq '^libr(bd|ados)\.so'; then
+    echo 'QEMU RPM unexpectedly depends on unavailable Ceph RBD libraries' >&2
+    exit 1
+fi
+
+install -m 0644 "${qemu_rpms[0]}" "${output_dir}/"
 install -m 0644 "${rpmbuild_root}/SRPMS/"*.src.rpm "${output_dir}/"

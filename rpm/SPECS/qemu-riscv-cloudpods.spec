@@ -3,7 +3,7 @@
 
 Name:           qemu-riscv-cloudpods
 Version:        10.0.7
-Release:        3.oe2403sp3
+Release:        4.oe2403sp3
 Summary:        QEMU RISC-V system emulator for Cloudpods on openEuler
 License:        GPL-2.0-or-later
 URL:            https://www.qemu.org/
@@ -40,6 +40,10 @@ install -m 0755 \
 /usr/local/qemu-10.0.7
 
 %changelog
+* Mon Aug 17 2026 Cloudpods RISC-V deployment <root@localhost> - 10.0.7-4.oe2403sp3
+- Disable optional RBD support because the target openEuler RISC-V repositories
+  do not publish the required librbd1 and librados2 runtime packages.
+
 * Sun Aug 16 2026 Cloudpods RISC-V deployment <root@localhost> - 10.0.7-3.oe2403sp3
 - Fall back to userspace virtio tap networking when the host kernel omits vhost_net.
 - Preserve vhost acceleration automatically when /dev/vhost-net is available.

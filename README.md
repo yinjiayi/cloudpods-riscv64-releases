@@ -79,6 +79,11 @@ build explicitly sets `QEMU_KVM_SMOKE=skip`; the exact QEMU RPM must then pass
 `rpm/verify-qemu-kvm-rpm.sh` on the physical RISC-V virtualization host before
 the Pages publishing workflow accepts it.
 
+The target openEuler 24.03 LTS SP3 RISC-V repositories do not publish the
+`librbd1` and `librados2` runtime packages, so this QEMU build explicitly
+disables optional Ceph RBD support and rejects an RPM that regains either
+unresolvable library dependency. Local host storage remains supported.
+
 The workflows use the repository-scoped `GITHUB_TOKEN`; no personal access
 token is stored in repository secrets.
 
