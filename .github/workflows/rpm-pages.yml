@@ -11,6 +11,9 @@ on:
         description: KVM_VALIDATION_SHA256 from the physical RISC-V host
         required: true
         type: string
+  push:
+    tags:
+      - 'rpm-pages-riscv64-*'
 
 permissions:
   actions: read
@@ -22,18 +25,44 @@ jobs:
   validate-artifact:
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve the physical-host KVM attestation
+        id: attestation
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_BUILD_RUN_ID: ${{ inputs.build_run_id }}
+          INPUT_QEMU_SHA256: ${{ inputs.qemu_rpm_sha256 }}
+        run: |
+          set -Eeuo pipefail
+          if [[ ${EVENT_NAME} == workflow_dispatch ]]; then
+            build_run_id=${INPUT_BUILD_RUN_ID}
+            qemu_rpm_sha256=${INPUT_QEMU_SHA256}
+          else
+            test -f rpm/kvm-validation.env
+            build_run_id=$(sed -n 's/^RPM_BUILD_RUN_ID=//p' \
+              rpm/kvm-validation.env)
+            qemu_rpm_sha256=$(sed -n 's/^QEMU_RPM_SHA256=//p' \
+              rpm/kvm-validation.env)
+          fi
+          [[ ${build_run_id} =~ ^[0-9]+$ ]]
+          [[ ${qemu_rpm_sha256} =~ ^[0-9a-f]{64}$ ]]
+          echo "build_run_id=${build_run_id}" >> "${GITHUB_OUTPUT}"
+          echo "qemu_rpm_sha256=${qemu_rpm_sha256}" >> "${GITHUB_OUTPUT}"
+
       - name: Download the exact validated build artifact
         uses: actions/download-artifact@v4
         with:
           name: cloudpods-openeuler-24.03-sp3-riscv64-rpms
           path: validated
-          run-id: ${{ inputs.build_run_id }}
+          run-id: ${{ steps.attestation.outputs.build_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Match the physical-host KVM attestation
         shell: bash
         env:
-          EXPECTED_QEMU_SHA256: ${{ inputs.qemu_rpm_sha256 }}
+          EXPECTED_QEMU_SHA256: ${{ steps.attestation.outputs.qemu_rpm_sha256 }}
         run: |
           set -Eeuo pipefail
           [[ ${EXPECTED_QEMU_SHA256} =~ ^[0-9a-f]{64}$ ]]
@@ -46,8 +75,11 @@ jobs:
           cd validated/site/rpm/openEuler/24.03-LTS-SP3/riscv64
           sha256sum --check SHA256SUMS
 
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: validated/site
 

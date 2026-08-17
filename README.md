@@ -86,9 +86,10 @@ token is stored in repository secrets.
 7. Run `Build openEuler RISC-V RPMs` and note its workflow run ID.
 8. Download that run's RPM artifact to the physical RISC-V host and run
    `sudo rpm/verify-qemu-kvm-rpm.sh PATH_TO_QEMU_RPM`.
-9. Run `Publish KVM-validated RISC-V RPMs to Pages` with the original build run
-   ID and the emitted `KVM_VALIDATION_SHA256`. The publisher downloads and
-   checks that exact artifact; it does not rebuild it.
+9. Copy `rpm/kvm-validation.env.example` to `rpm/kvm-validation.env`, record the
+   original build run ID and emitted `KVM_VALIDATION_SHA256`, commit it, then
+   push an `rpm-pages-riscv64-*` tag. The publisher downloads and checks that
+   exact artifact; it does not rebuild it. Manual dispatch remains available.
 10. Tag and publish the ocboot RISC-V branch, then verify its GHCR package is
     public.
 
