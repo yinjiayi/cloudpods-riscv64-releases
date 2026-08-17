@@ -15,9 +15,12 @@ rpm_path=$(realpath -e "${1:?usage: verify-qemu-kvm-rpm.sh QEMU_RPM}")
 rpm_name=$(rpm -qp --qf '%{NAME}' "${rpm_path}")
 rpm_arch=$(rpm -qp --qf '%{ARCH}' "${rpm_path}")
 [[ ${rpm_name} == qemu-riscv-cloudpods && ${rpm_arch} == riscv64 ]]
+rpm_identity=$(rpm -qp --qf \
+    '%{NAME} %{EPOCHNUM} %{VERSION} %{RELEASE} %{ARCH}' "${rpm_path}")
 
 rpm_sha256=$(sha256sum "${rpm_path}" | awk '{print $1}')
-if rpm -q "${rpm_name}" >/dev/null 2>&1; then
+if rpm -q --qf '%{NAME} %{EPOCHNUM} %{VERSION} %{RELEASE} %{ARCH}\n' \
+        "${rpm_name}" 2>/dev/null | grep -Fxq "${rpm_identity}"; then
     # Reinstall even when the host already carries the same NEVRA.  Release
     # candidates can have identical package metadata while differing in their
     # exact payload, so a normal dnf install could otherwise leave an older
