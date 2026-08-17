@@ -37,8 +37,11 @@ jobs:
           sudo dnf install -y \
             buildah createrepo_c dnf-plugins-core file git gnupg2 ninja-build \
             rpm-build rpmdevtools skopeo xz
-          sudo dnf builddep -y qemu
-          sudo dnf builddep -y "${OPENVSWITCH_SRPM_URL}"
+          # Some optional accelerators are not published for riscv64 in the
+          # openEuler repositories (for example intel-qpl and qatzip).  QEMU
+          # and Open vSwitch build correctly without those optional features.
+          sudo dnf builddep -y --skip-unavailable qemu
+          sudo dnf builddep -y --skip-unavailable "${OPENVSWITCH_SRPM_URL}"
         env:
           OPENVSWITCH_SRPM_URL: https://mirror.iscas.ac.cn/openeuler/openEuler-24.03-LTS-SP3/update/source/Packages/openvswitch-3.2.1-5.oe2403sp3.src.rpm
 
