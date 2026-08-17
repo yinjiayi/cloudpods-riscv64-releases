@@ -65,6 +65,9 @@ compiled regular expressions therefore use their interpreter paths. The
 service also disables .NET tiered compilation and dynamic PGO so the long-lived
 Worker does not switch to background-recompiled code while running under QEMU
 user-mode translation. This keeps W^X enabled and does not modify Cloudpods.
+The generated systemd drop-in uses `KillMode=control-group`, so stopping or
+restarting the service also terminates native build children left behind by a
+cancelled emulated Worker.
 
 Obtain a one-time repository registration token immediately before use, then
 run `scripts/register-riscv64-actions-runner.sh` with it in the
@@ -78,6 +81,22 @@ the Pages publishing workflow accepts it.
 
 The workflows use the repository-scoped `GITHUB_TOKEN`; no personal access
 token is stored in repository secrets.
+
+## Offline image recovery
+
+Public GHCR images can be converted to a checksum-verified OCI archive on a
+machine with registry access, then copied to an offline Cloudpods node:
+
+```bash
+./scripts/pull-ghcr-to-oci-archive.sh \
+  ghcr.io/yinjiayi/cloudpods-web:v4.0.3-riscv64-ui2 \
+  cloudpods-web-v4.0.3-riscv64-ui2.oci.tar
+sudo ctr -n k8s.io images import cloudpods-web-v4.0.3-riscv64-ui2.oci.tar
+```
+
+The downloader uses anonymous GHCR pull tokens and verifies the manifest and
+every blob against its SHA-256 digest. It accepts a single-platform OCI image
+manifest; use the architecture-specific tags recorded in the image lock files.
 
 ## Release order
 

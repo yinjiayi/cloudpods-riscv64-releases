@@ -69,6 +69,8 @@ printf '%s\n' \
     'Environment=DOTNET_GCHeapHardLimit=0x40000000' \
     'Environment=DOTNET_TieredCompilation=0' \
     'Environment=DOTNET_TieredPGO=0' \
+    'KillMode=control-group' \
+    'TimeoutStopSec=60s' \
     "ExecStartPre=/usr/bin/install -m 0644 /etc/resolv.conf ${runner_sysroot}/etc/resolv.conf" \
     "ExecStartPre=/usr/bin/install -m 0644 /etc/hosts ${runner_sysroot}/etc/hosts" \
     > "${dropin_tmp}"

@@ -30,13 +30,29 @@ else
 fi
 echo "${CLOUDPODS_SOURCE_ARCHIVE_SHA256}  ${source_archive}" | \
     sha256sum --check
+if [[ -n ${source_cache} ]]; then
+    install -d -m 0755 "${source_cache}"
+    cache_tmp=$(mktemp "${source_cache}/.${CLOUDPODS_SOURCE_ARCHIVE}.XXXXXX")
+    install -m 0644 "${source_archive}" "${cache_tmp}"
+    mv "${cache_tmp}" "${source_cache}/${CLOUDPODS_SOURCE_ARCHIVE}"
+fi
 install -d -m 0755 "${source_dir}"
 tar -C "${source_dir}" --strip-components=1 -xzf "${source_archive}"
 git -C "${source_dir}" apply \
     "${repo_root}/rpm/SOURCES/cloudpods-executor-parse-flags.patch"
 
 buildah rm cloudpods-executor-builder >/dev/null 2>&1 || true
-buildah from --name cloudpods-executor-builder "${builder_image}" >/dev/null
+for attempt in {1..5}; do
+    if buildah from --name cloudpods-executor-builder "${builder_image}" >/dev/null; then
+        break
+    fi
+    buildah rm cloudpods-executor-builder >/dev/null 2>&1 || true
+    if (( attempt == 5 )); then
+        echo "failed to pull ${builder_image} after ${attempt} attempts" >&2
+        exit 1
+    fi
+    sleep $(( attempt * 2 ))
+done
 buildah run \
     --env GOPROXY=https://goproxy.cn,direct \
     --volume "${source_dir}:/src:rw" \

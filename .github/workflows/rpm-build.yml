@@ -45,6 +45,13 @@ jobs:
         env:
           OPENVSWITCH_SRPM_URL: https://mirror.iscas.ac.cn/openeuler/openEuler-24.03-LTS-SP3/update/source/Packages/openvswitch-3.2.1-5.oe2403sp3.src.rpm
 
+      - name: Log in to GHCR for build inputs
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "${GHCR_TOKEN}" | buildah login ghcr.io \
+            --username "${GITHUB_ACTOR}" --password-stdin
+
       - name: Build RPM repository
         run: "${RELEASE_SOURCE_ROOT}/rpm/build-all.sh"
         env:
