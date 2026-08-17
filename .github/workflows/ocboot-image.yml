@@ -13,6 +13,12 @@ permissions:
 jobs:
   build:
     runs-on: [self-hosted, linux, riscv64, openeuler-24.03-riscv64]
+    # The x86_64 Actions Worker runs through QEMU user mode on this native
+    # RISC-V host.  A rare post-job .NET serialization crash can mark the job
+    # failed after every build step and GHCR push succeeded.  The hosted
+    # verify-public job below is the release gate and checks the exact source
+    # revision, so let it run even when only the emulated result reporter dies.
+    continue-on-error: true
     timeout-minutes: 120
     steps:
       - name: Fetch pinned workflow source with native curl
@@ -84,12 +90,24 @@ jobs:
           test "$(uname -m)" = riscv64
           printf '%s' "${GHCR_TOKEN}" | buildah login ghcr.io \
             --username "${GITHUB_ACTOR}" --password-stdin
-          buildah bud \
-            --arch riscv64 \
-            --label "org.opencontainers.image.source=https://github.com/yinjiayi/ocboot" \
-            --label "org.opencontainers.image.revision=${OCBOOT_SOURCE_COMMIT}" \
-            --file "${OCBOOT_SOURCE_ROOT}/Dockerfile.riscv64" \
-            --tag "${image}" "${OCBOOT_SOURCE_ROOT}"
+
+          built=false
+          if metadata=$(skopeo inspect --override-os linux --override-arch riscv64 \
+              "docker://${image}" 2>/dev/null) && \
+              test "$(jq -r .Architecture <<<"${metadata}")" = riscv64 && \
+              test "$(jq -r '.Labels["org.opencontainers.image.revision"] // ""' \
+                <<<"${metadata}")" = "${OCBOOT_SOURCE_COMMIT}"; then
+            echo "Reusing published image for ${OCBOOT_SOURCE_COMMIT}: ${image}"
+            buildah pull --arch riscv64 "${image}"
+          else
+            buildah bud \
+              --arch riscv64 \
+              --label "org.opencontainers.image.source=https://github.com/yinjiayi/ocboot" \
+              --label "org.opencontainers.image.revision=${OCBOOT_SOURCE_COMMIT}" \
+              --file "${OCBOOT_SOURCE_ROOT}/Dockerfile.riscv64" \
+              --tag "${image}" "${OCBOOT_SOURCE_ROOT}"
+            built=true
+          fi
           test "$(buildah inspect --format '{{.OCIv1.Architecture}}' "${image}")" = riscv64
           buildah from --name "${verifier}" "${image}" >/dev/null
           buildah run "${verifier}" -- sh -ec '
@@ -98,10 +116,13 @@ jobs:
             python3 --version
             ansible --version
           '
-          buildah push "${image}" "docker://${image}"
+          if test "${built}" = true; then
+            buildah push "${image}" "docker://${image}"
+          fi
 
   verify-public:
     needs: build
+    if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -116,4 +137,6 @@ jobs:
           metadata=$(skopeo inspect --override-os linux --override-arch riscv64 \
             "docker://ghcr.io/yinjiayi/ocboot:${OCBOOT_VERSION}")
           test "$(jq -r .Architecture <<<"${metadata}")" = riscv64
+          test "$(jq -r '.Labels["org.opencontainers.image.revision"] // ""' \
+            <<<"${metadata}")" = "${OCBOOT_SOURCE_COMMIT}"
           jq -r .Digest <<<"${metadata}" | grep -Eq '^sha256:[0-9a-f]{64}$'
