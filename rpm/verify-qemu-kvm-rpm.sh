@@ -17,7 +17,16 @@ rpm_arch=$(rpm -qp --qf '%{ARCH}' "${rpm_path}")
 [[ ${rpm_name} == qemu-riscv-cloudpods && ${rpm_arch} == riscv64 ]]
 
 rpm_sha256=$(sha256sum "${rpm_path}" | awk '{print $1}')
-dnf install -y "${rpm_path}"
+if rpm -q "${rpm_name}" >/dev/null 2>&1; then
+    # Reinstall even when the host already carries the same NEVRA.  Release
+    # candidates can have identical package metadata while differing in their
+    # exact payload, so a normal dnf install could otherwise leave an older
+    # local build in place and attest the wrong binary.
+    dnf reinstall -y "${rpm_path}"
+else
+    dnf install -y "${rpm_path}"
+fi
+rpm -V "${rpm_name}"
 
 qemu_bin=/usr/local/qemu-10.0.7/bin/qemu-system-riscv64
 [[ -x ${qemu_bin} ]]
