@@ -7,6 +7,7 @@ on:
       - 'source-assets-pages-*'
 
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
@@ -21,11 +22,60 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download and verify pinned source assets
+      - name: Resolve the pinned KVM-validated RPM build
+        id: attestation
         shell: bash
         run: |
           set -Eeuo pipefail
+          if [[ ! -f rpm/kvm-validation.env ]]; then
+            echo 'available=false' >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          source rpm/kvm-validation.env
+          [[ ${RPM_BUILD_RUN_ID} =~ ^[0-9]+$ ]]
+          [[ ${QEMU_RPM_SHA256} =~ ^[0-9a-f]{64}$ ]]
+          echo 'available=true' >> "${GITHUB_OUTPUT}"
+          echo "build_run_id=${RPM_BUILD_RUN_ID}" >> "${GITHUB_OUTPUT}"
+          echo "qemu_rpm_sha256=${QEMU_RPM_SHA256}" >> "${GITHUB_OUTPUT}"
+
+      - name: Download the pinned validated RPM site
+        if: steps.attestation.outputs.available == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: cloudpods-openeuler-24.03-sp3-riscv64-rpms
+          path: validated
+          run-id: ${{ steps.attestation.outputs.build_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Match the physical-host KVM attestation
+        if: steps.attestation.outputs.available == 'true'
+        shell: bash
+        env:
+          EXPECTED_QEMU_SHA256: ${{ steps.attestation.outputs.qemu_rpm_sha256 }}
+        run: |
+          set -Eeuo pipefail
+          mapfile -t qemu_rpms < <(
+            find validated/dist/rpm/riscv64 -maxdepth 1 -type f \
+              -name 'qemu-riscv-cloudpods-*.riscv64.rpm' | sort
+          )
+          [[ ${#qemu_rpms[@]} -eq 1 ]]
+          echo "${EXPECTED_QEMU_SHA256}  ${qemu_rpms[0]}" | sha256sum --check
+          (
+            cd validated/site/rpm/openEuler/24.03-LTS-SP3/riscv64
+            sha256sum --check SHA256SUMS
+          )
+
+      - name: Download and verify pinned source assets
+        shell: bash
+        env:
+          HAS_VALIDATED_RPMS: ${{ steps.attestation.outputs.available }}
+        run: |
+          set -Eeuo pipefail
           source versions.env
+          install -d -m 0755 site
+          if [[ ${HAS_VALIDATED_RPMS} == true ]]; then
+            cp -a validated/site/. site/
+          fi
           release_base=https://github.com/yinjiayi/cloudpods-riscv64-releases/releases/download/${CLOUDPODS_SOURCE_ASSET_TAG}
           install -d -m 0755 site/source-assets
           for asset in "${CLOUDPODS_SOURCE_ARCHIVE}" "${OCBOOT_SOURCE_ARCHIVE}"; do

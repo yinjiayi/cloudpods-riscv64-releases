@@ -6,7 +6,8 @@ Reproducible release source for running Cloudpods `v4.0.3` on openEuler
 This repository publishes two classes of deliverables:
 
 - OCI images under `ghcr.io/yinjiayi`
-- RPM repository metadata through GitHub Pages
+- source archives and RPM repository metadata through one atomic GitHub Pages
+  site
 
 K3s itself is built from the `yinjiayi/k3s` fork. ocboot consumes the K3s
 release assets, the GHCR image names, and the RPM repository from the
@@ -110,7 +111,9 @@ manifest; use the architecture-specific tags recorded in the image lock files.
 2. Export the pinned Cloudpods and ocboot commits, verify
    `source-assets/SHA256SUMS`, and publish them under the source-asset release
    tag recorded in `versions.env`; then run `Publish native-build source assets
-   to Pages` so the RISC-V runner uses the resumable Pages mirror.
+   to Pages` so the RISC-V runner uses the resumable Pages mirror. When a
+   KVM-validated RPM build is already pinned, this workflow carries that exact
+   repository into the same Pages artifact instead of replacing it.
 3. Run `Build K3s RISC-V images`.
 4. Confirm each new package is Public in GitHub package settings; change it if
    the package did not inherit visibility from the public source repository.
@@ -124,7 +127,9 @@ manifest; use the architecture-specific tags recorded in the image lock files.
 10. Copy `rpm/kvm-validation.env.example` to `rpm/kvm-validation.env`, record the
    original build run ID and emitted `KVM_VALIDATION_SHA256`, commit it, then
    push an `rpm-pages-riscv64-*` tag. The publisher downloads and checks that
-   exact artifact; it does not rebuild it. Manual dispatch remains available.
+   exact artifact, adds the pinned source archives, and deploys the complete
+   Pages site atomically; it does not rebuild it. Manual dispatch remains
+   available.
 11. Tag the ocboot RISC-V branch, run `Build and publish ocboot RISC-V image`
     from this release repository, then verify its GHCR package is public.
 
