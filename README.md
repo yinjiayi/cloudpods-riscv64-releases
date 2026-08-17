@@ -80,7 +80,7 @@ token is stored in repository secrets.
 3. Confirm each new package is Public in GitHub package settings; change it if
    the package did not inherit visibility from the public source repository.
 4. Run `scripts/verify-ghcr-public.sh images/k3s-images.lock` without credentials.
-5. Tag the K3s fork with `v1.28.5+k3s1-riscv64.2`.
+5. Tag the K3s fork with `v1.28.5+k3s1-riscv64.3`.
 6. Run `Build and publish Cloudpods RISC-V images`, make any new packages
    public, and verify `images/cloudpods-images.lock` the same way.
 7. Run `Build openEuler RISC-V RPMs` and note its workflow run ID.
