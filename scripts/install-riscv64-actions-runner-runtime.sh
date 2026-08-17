@@ -274,6 +274,8 @@ runner_env=(
     DOTNET_gcServer=0
     DOTNET_gcConcurrent=0
     DOTNET_GCHeapHardLimit=0x40000000
+    DOTNET_TieredCompilation=0
+    DOTNET_TieredPGO=0
 )
 [[ $(env "${runner_env[@]}" "${runner_sysroot_link}/bin/uname" -m) == x86_64 ]]
 [[ $(env "${runner_env[@]}" "${runner_root}/bin/Runner.Listener" --version) == ${ACTION_RUNNER_VERSION} ]]

@@ -6,7 +6,7 @@ checked against SHA-256 digests before a release is published.
 | Component | Source |
 | --- | --- |
 | K3s | `yinjiayi/k3s` RISC-V branch based on `k3s-io/k3s` tag `v1.28.5+k3s1` |
-| ocboot | `yinjiayi/ocboot` RISC-V branch based on Cloudpods `v4.0.3`; its RISC-V image uses the measured reachable Aliyun Alpine mirror |
+| ocboot | `yinjiayi/ocboot` RISC-V branch based on Cloudpods `v4.0.3`; its RISC-V image uses the measured reachable Aliyun Alpine and Huawei Cloud PyPI mirrors plus Alpine's native `py3-cryptography` and `py3-yaml` packages |
 | Native-build source assets | exact Cloudpods and ocboot commits exported once, published as release assets, mirrored through GitHub Pages, and pinned by SHA-256 so slow links can resume without changing source |
 | K3s root filesystem | `k3s-io/k3s-root` release `v0.13.0` |
 | CoreDNS | `coredns/coredns` tag `v1.11.1` |
@@ -19,7 +19,7 @@ checked against SHA-256 digests before a release is published.
 | Cloudpods QEMU | signed `download.qemu.org` source `10.0.7` |
 | Actions Runner QEMU | signed `download.qemu.org` source `11.1.0`, `x86_64-linux-user` only |
 | GitHub Actions Runner | official `actions/runner` x64 release `2.336.0`, SHA-256 pinned |
-| Runner .NET compatibility | deterministic Mono.Cecil `0.11.6` transform of the pinned Json.NET DLL plus the .NET 8 `ForceInterpretedInvoke` and `RuntimeFeature.IsDynamicCodeSupported=false` AppContext settings on Listener, Worker, and PluginHost |
+| Runner .NET compatibility | deterministic Mono.Cecil `0.11.6` transform of the pinned Json.NET DLL plus the .NET 8 `ForceInterpretedInvoke` and `RuntimeFeature.IsDynamicCodeSupported=false` AppContext settings on Listener, Worker, and PluginHost; tiered compilation and dynamic PGO are disabled for the emulated control processes |
 | Runner sysroot | signed Canonical Ubuntu 22.04 OCI build `20260810`, SHA-256 pinned |
 | Runner ICU | Ubuntu Jammy `libicu70` package `70.1-2`, SHA-256 pinned |
 | Open vSwitch | openEuler 24.03 LTS SP3 SRPM plus the checked-in GCC 14 patch |

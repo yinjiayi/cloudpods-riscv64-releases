@@ -14,7 +14,7 @@ release assets, the GHCR image names, and the RPM repository from the
 of this delivery.
 
 Customer deployment steps are in the
-[openEuler RISC-V single-node guide](https://github.com/yinjiayi/ocboot/blob/v4.0.3-riscv64.3/docs/customer-deployment-openeuler-riscv64.md).
+[openEuler RISC-V single-node guide](https://github.com/yinjiayi/ocboot/blob/v4.0.3-riscv64.4/docs/customer-deployment-openeuler-riscv64.md).
 
 ## Release layout
 
@@ -61,8 +61,10 @@ compatibility DLL built by `runner-compat.yml`, then applies the official .NET
 `Switch.System.Reflection.ForceInterpretedInvoke` and
 `System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported=false`
 AppContext settings to Listener, Worker, and PluginHost. Reflection invokes and
-compiled regular expressions therefore use their interpreter paths. This keeps
-W^X enabled and does not modify Cloudpods.
+compiled regular expressions therefore use their interpreter paths. The
+service also disables .NET tiered compilation and dynamic PGO so the long-lived
+Worker does not switch to background-recompiled code while running under QEMU
+user-mode translation. This keeps W^X enabled and does not modify Cloudpods.
 
 Obtain a one-time repository registration token immediately before use, then
 run `scripts/register-riscv64-actions-runner.sh` with it in the
