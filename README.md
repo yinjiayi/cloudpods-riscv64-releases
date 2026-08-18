@@ -55,6 +55,10 @@ checks every published image manifest and runtime binary as `riscv64`.
 Existing dependency mirrors are reused only when the normalized RISC-V OCI
 config SHA-256 matches the pinned source; that config includes the rootfs
 DiffIDs, architecture, history, and runtime settings.
+The core build uses four outer Make jobs, eight Go package jobs per target, and
+one compiler thread per emulated process. This keeps at most 32 RISC-V package
+compilers active on the 32-vCPU x86 runner instead of multiplying both layers
+of parallelism.
 
 The native RPM and KVM-validation runner must provide:
 

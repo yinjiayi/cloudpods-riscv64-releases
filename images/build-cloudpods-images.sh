@@ -32,6 +32,17 @@ case "${host_arch}" in
         exit 1
         ;;
 esac
+
+CLOUDPODS_CORE_MAKE_JOBS=${CLOUDPODS_CORE_MAKE_JOBS:-4}
+CLOUDPODS_CORE_GO_PARALLELISM=${CLOUDPODS_CORE_GO_PARALLELISM:-8}
+CLOUDPODS_CORE_GOMAXPROCS=${CLOUDPODS_CORE_GOMAXPROCS:-1}
+for concurrency_var in \
+    CLOUDPODS_CORE_MAKE_JOBS \
+    CLOUDPODS_CORE_GO_PARALLELISM \
+    CLOUDPODS_CORE_GOMAXPROCS; do
+    concurrency_value=${!concurrency_var}
+    [[ ${concurrency_value} =~ ^[1-9][0-9]*$ ]]
+done
 echo "RISC-V execution mode: ${execution_mode} (host: ${host_arch})"
 : "${GITHUB_ACTOR:?GITHUB_ACTOR is required}"
 : "${GHCR_TOKEN:?GHCR_TOKEN is required}"
@@ -324,10 +335,13 @@ cloudpods_binaries=(
 cloudpods_binary_list=${cloudpods_binaries[*]}
 buildah run \
     --env GOPROXY=https://goproxy.cn,direct \
+    --env "GOFLAGS=-p=${CLOUDPODS_CORE_GO_PARALLELISM}" \
+    --env "GOMAXPROCS=${CLOUDPODS_CORE_GOMAXPROCS}" \
+    --env "CLOUDPODS_CORE_MAKE_JOBS=${CLOUDPODS_CORE_MAKE_JOBS}" \
     --env "CLOUDPODS_BINARIES=${cloudpods_binary_list}" \
     --volume "${source_dir}/cloudpods:/src:rw" \
     "${cloudpods_builder}" -- \
-    sh -ec "cd /src; install -d _output/alpine-build/bin; targets=; for binary in \${CLOUDPODS_BINARIES}; do targets=\"\${targets} cmd/\${binary}\"; done; make -j\$(nproc) ONECLOUD_CI_BUILD=1 GIT_VERSION=v4.0.3 GIT_COMMIT=${CLOUDPODS_SOURCE_COMMIT} GIT_BRANCH=${CLOUDPODS_SOURCE_REF} GIT_TREE_STATE=dirty BIN_DIR=/src/_output/alpine-build/bin \${targets}; for binary in \${CLOUDPODS_BINARIES}; do test -x \"_output/alpine-build/bin/\${binary}\"; done"
+    sh -ec "cd /src; install -d _output/alpine-build/bin; targets=; for binary in \${CLOUDPODS_BINARIES}; do targets=\"\${targets} cmd/\${binary}\"; done; make -j\"\${CLOUDPODS_CORE_MAKE_JOBS}\" ONECLOUD_CI_BUILD=1 GIT_VERSION=v4.0.3 GIT_COMMIT=${CLOUDPODS_SOURCE_COMMIT} GIT_BRANCH=${CLOUDPODS_SOURCE_REF} GIT_TREE_STATE=dirty BIN_DIR=/src/_output/alpine-build/bin \${targets}; for binary in \${CLOUDPODS_BINARIES}; do test -x \"_output/alpine-build/bin/\${binary}\"; done"
 remove_builder "${cloudpods_builder}"
 
 new_builder cloudpods-sdn-builder "${builder_image}"
