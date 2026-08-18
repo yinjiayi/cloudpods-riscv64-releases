@@ -31,7 +31,8 @@ jobs:
           test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' \
             "${asset_ref}")" = linux/riscv64
           docker create --platform linux/riscv64 \
-            --name "${asset_container}" "${asset_ref}" >/dev/null
+            --name "${asset_container}" --entrypoint /bin/true \
+            "${asset_ref}" >/dev/null
           install -d -m 0755 build-input/dashboard-dist build-input/k3s-release
           docker cp "${asset_container}:/assets/dashboard/." \
             build-input/dashboard-dist/
