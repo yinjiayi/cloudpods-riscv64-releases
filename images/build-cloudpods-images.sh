@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 source "${repo_root}/versions.env"
+source "${repo_root}/images/lib-riscv64-image-mirror.sh"
 
 host_arch=$(uname -m)
 case "${host_arch}" in
@@ -176,6 +177,10 @@ mirror_dependencies() {
     while IFS=$'\t' read -r source_image target_image; do
         [[ -n ${source_image} && -n ${target_image} ]]
         [[ ${source_image} != localhost/* ]] || continue
+        if riscv64_mirror_is_current "${source_image}" "${target_image}"; then
+            echo "Using verified existing dependency mirror: ${target_image}"
+            continue
+        fi
         buildah pull --arch riscv64 "${source_image}"
         [[ $(buildah inspect --format '{{.OCIv1.Architecture}}' "${source_image}") == riscv64 ]]
         buildah tag "${source_image}" "${target_image}"
@@ -256,7 +261,7 @@ buildah run \
 remove_builder "${helm_packager}"
 
 kube_builder_image=localhost/cloudpods/cloudpods-kube-build:${CLOUDPODS_KUBE_BUILD_IMAGE_VERSION}
-buildah bud --arch riscv64 --layers \
+buildah bud --arch riscv64 --layers --network host \
     --build-arg "BASE_IMAGE=${GHCR_NAMESPACE}/cloudpods-kube-build:3.22.2-go-1.24.9-0-riscv64.1" \
     --build-arg "LLD_VERSION=${CLOUDPODS_KUBE_BUILD_LLD_VERSION}" \
     --tag "${kube_builder_image}" \

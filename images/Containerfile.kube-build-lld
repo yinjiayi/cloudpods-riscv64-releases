@@ -2,8 +2,11 @@ ARG BASE_IMAGE=ghcr.io/yinjiayi/cloudpods-kube-build:3.22.2-go-1.24.9-0-riscv64.
 FROM ${BASE_IMAGE}
 
 ARG LLD_VERSION=20.1.8-r0
+ARG ALPINE_MIRROR=https://mirrors.aliyun.com/alpine
 
-RUN apk add --no-cache "lld20=${LLD_VERSION}" \
+RUN printf '%s/v3.22/main\n%s/v3.22/community\n' \
+        "${ALPINE_MIRROR}" "${ALPINE_MIRROR}" >/etc/apk/repositories \
+    && apk add --no-cache "lld20=${LLD_VERSION}" \
     && ld.lld --version | grep -F "LLD 20.1.8"
 
 LABEL org.opencontainers.image.source="https://github.com/yinjiayi/cloudpods-riscv64-releases" \

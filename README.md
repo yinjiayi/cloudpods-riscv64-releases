@@ -52,6 +52,9 @@ The Cloudpods image runner must provide:
 The workflow requires `QEMU_USER_RISCV64=1`, verifies the registered
 interpreter, compiles and runs a RISC-V Go ELF before the full build, and then
 checks every published image manifest and runtime binary as `riscv64`.
+Existing dependency mirrors are reused only when the normalized RISC-V OCI
+config SHA-256 matches the pinned source; that config includes the rootfs
+DiffIDs, architecture, history, and runtime settings.
 
 The native RPM and KVM-validation runner must provide:
 
