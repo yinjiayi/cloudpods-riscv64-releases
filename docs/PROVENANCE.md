@@ -7,6 +7,8 @@ checked against SHA-256 digests before a release is published.
 | --- | --- |
 | K3s | `yinjiayi/k3s` RISC-V branch based on `k3s-io/k3s` tag `v1.28.5+k3s1` |
 | ocboot | `yinjiayi/ocboot` RISC-V branch based on Cloudpods `v4.0.3`; its RISC-V image uses the measured reachable Aliyun Alpine and Huawei Cloud PyPI mirrors plus Alpine's native `py3-cryptography` and `py3-yaml` packages |
+| Cloudpods operator | `yinjiayi/cloudpods-operator` commit `844387f47a91bc477b427449f98501b6b54eabc7`, based on upstream `v4.0.3`, with the configured etcd BusyBox image propagated to the local-storage helper pod |
+| KubeServer | `yunionio/kubecomps` tag `v4.0.3`, commit `eb381ed38b587e2cabd081c69a0e6b0aa04a5360`, built natively on RISC-V with the three pinned kubespray submodule archives recorded in `versions.env` |
 | Native-build source assets | exact Cloudpods and ocboot commits exported once, published as release assets, mirrored through GitHub Pages, and pinned by SHA-256 so slow links can resume without changing source |
 | K3s root filesystem | `k3s-io/k3s-root` release `v0.13.0` |
 | CoreDNS | `coredns/coredns` tag `v1.11.1` |

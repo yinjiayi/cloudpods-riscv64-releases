@@ -15,13 +15,13 @@ release assets, the GHCR image names, and the RPM repository from the
 of this delivery.
 
 Customer deployment steps are in the
-[openEuler RISC-V single-node guide](https://github.com/yinjiayi/ocboot/blob/v4.0.3-riscv64.5/docs/customer-deployment-openeuler-riscv64.md).
+[openEuler RISC-V single-node guide](https://github.com/yinjiayi/ocboot/blob/v4.0.3-riscv64.6/docs/customer-deployment-openeuler-riscv64.md).
 
 ## Release layout
 
 | Deliverable | Location |
 | --- | --- |
-| K3s binary and air-gap bundle | `yinjiayi.github.io/cloudpods-riscv64-releases/k3s/v1.28.5-k3s1-riscv64.3/` |
+| K3s binary and air-gap bundle | `yinjiayi.github.io/cloudpods-riscv64-releases/k3s/v1.28.5-k3s1-riscv64.4/` |
 | Pinned native-build source archives | `yinjiayi.github.io/cloudpods-riscv64-releases/source-assets/` |
 | K3s system images | `ghcr.io/yinjiayi/k3s-*` |
 | Cloudpods runtime images | `ghcr.io/yinjiayi/*` |
@@ -118,7 +118,7 @@ manifest; use the architecture-specific tags recorded in the image lock files.
 4. Confirm each new package is Public in GitHub package settings; change it if
    the package did not inherit visibility from the public source repository.
 5. Run `scripts/verify-ghcr-public.sh images/k3s-images.lock` without credentials.
-6. Tag the K3s fork with `v1.28.5+k3s1-riscv64.3`.
+6. Tag the K3s fork with `v1.28.5+k3s1-riscv64.4`.
 7. Run `Build and publish Cloudpods RISC-V images`, make any new packages
    public, and verify `images/cloudpods-images.lock` the same way.
 8. Run `Build openEuler RISC-V RPMs` and note its workflow run ID.
