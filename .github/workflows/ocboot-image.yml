@@ -55,11 +55,19 @@ jobs:
           source "${RELEASE_SOURCE_ROOT}/versions.env"
           asset_root=${RUNNER_TEMP}/ocboot-source-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
           source_archive=${asset_root}/${OCBOOT_SOURCE_ARCHIVE}
-          source_url=${SOURCE_ASSET_PAGE_BASE_URL}/${OCBOOT_SOURCE_ARCHIVE}
+          source_archive_part=${source_archive}.part
+          release_url=https://github.com/${GITHUB_REPOSITORY}/releases/download/${CLOUDPODS_SOURCE_ASSET_TAG}/${OCBOOT_SOURCE_ARCHIVE}
+          pages_url=${SOURCE_ASSET_PAGE_BASE_URL}/${OCBOOT_SOURCE_ARCHIVE}
           install -d -m 0755 "${asset_root}/src"
-          curl --fail --location --retry 10 --retry-all-errors \
-            --continue-at - --connect-timeout 20 --max-time 1800 \
-            "${source_url}" --output "${source_archive}"
+          if ! curl --fail --location --retry 5 --retry-all-errors \
+              --connect-timeout 20 --max-time 600 \
+              "${release_url}" --output "${source_archive_part}"; then
+            rm -f "${source_archive_part}"
+            curl --fail --location --retry 5 --retry-all-errors \
+              --connect-timeout 20 --max-time 600 \
+              "${pages_url}" --output "${source_archive_part}"
+          fi
+          mv "${source_archive_part}" "${source_archive}"
           echo "${OCBOOT_SOURCE_ARCHIVE_SHA256}  ${source_archive}" | \
             sha256sum --check
           tar -C "${asset_root}/src" --strip-components=1 \
