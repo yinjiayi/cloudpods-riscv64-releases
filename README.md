@@ -101,8 +101,9 @@ sudo ctr -n k8s.io images import cloudpods-web-v4.0.3-riscv64-ui2.oci.tar
 ```
 
 The downloader uses anonymous GHCR pull tokens and verifies the manifest and
-every blob against its SHA-256 digest. It accepts a single-platform OCI image
-manifest; use the architecture-specific tags recorded in the image lock files.
+every blob against its SHA-256 digest. It accepts a single-platform OCI or
+Docker v2 image manifest; use the architecture-specific tags recorded in the
+image lock files.
 
 ## Release order
 

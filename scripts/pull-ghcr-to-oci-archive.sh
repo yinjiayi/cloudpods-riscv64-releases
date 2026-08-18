@@ -54,16 +54,19 @@ token=$(curl --fail --silent --show-error --location --get \
 curl --fail --silent --show-error --location \
     --connect-timeout 20 --retry 5 --retry-all-errors --retry-delay 2 \
     --header "Authorization: Bearer ${token}" \
-    --header 'Accept: application/vnd.oci.image.manifest.v1+json' \
+    --header 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
     --dump-header "${headers_file}" \
     "https://ghcr.io/v2/${repository}/manifests/${tag}" \
     --output "${manifest_file}"
 
 media_type=$(jq -er '.mediaType' "${manifest_file}")
-[ "${media_type}" = 'application/vnd.oci.image.manifest.v1+json' ] || {
-    echo "expected an OCI image manifest, got ${media_type}" >&2
-    exit 1
-}
+case "${media_type}" in
+    application/vnd.oci.image.manifest.v1+json|application/vnd.docker.distribution.manifest.v2+json) ;;
+    *)
+        echo "expected an OCI or Docker v2 image manifest, got ${media_type}" >&2
+        exit 1
+        ;;
+esac
 
 manifest_sha=$(sha256_file "${manifest_file}")
 manifest_digest=sha256:${manifest_sha}
@@ -99,9 +102,10 @@ printf '{"imageLayoutVersion":"1.0.0"}\n' >"${layout_dir}/oci-layout"
 manifest_size=$(wc -c <"${manifest_file}" | tr -d ' ')
 jq -n \
     --arg digest "${manifest_digest}" \
+    --arg media_type "${media_type}" \
     --arg ref "${image_ref}" \
     --argjson size "${manifest_size}" \
-    '{schemaVersion: 2, manifests: [{mediaType: "application/vnd.oci.image.manifest.v1+json", digest: $digest, size: $size, annotations: {"org.opencontainers.image.ref.name": $ref}}]}' \
+    '{schemaVersion: 2, manifests: [{mediaType: $media_type, digest: $digest, size: $size, annotations: {"org.opencontainers.image.ref.name": $ref}}]}' \
     >"${layout_dir}/index.json"
 
 mkdir -p "$(dirname "${output}")"
