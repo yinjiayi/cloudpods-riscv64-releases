@@ -131,7 +131,8 @@ jobs:
           source versions.env
           command -v jq
           command -v skopeo
-          metadata=$(skopeo inspect --override-os linux --override-arch riscv64 \
+          metadata=$(skopeo inspect --no-creds \
+            --override-os linux --override-arch riscv64 \
             "docker://ghcr.io/yinjiayi/ocboot:${OCBOOT_VERSION}")
           test "$(jq -r .Architecture <<<"${metadata}")" = riscv64
           test "$(jq -r '.Labels["org.opencontainers.image.revision"] // ""' \
