@@ -21,7 +21,7 @@ Customer deployment steps are in the
 
 | Deliverable | Location |
 | --- | --- |
-| K3s binary and air-gap bundle | `github.com/yinjiayi/k3s/releases` |
+| K3s binary and air-gap bundle | `yinjiayi.github.io/cloudpods-riscv64-releases/k3s/v1.28.5-k3s1-riscv64.3/` |
 | Pinned native-build source archives | `yinjiayi.github.io/cloudpods-riscv64-releases/source-assets/` |
 | K3s system images | `ghcr.io/yinjiayi/k3s-*` |
 | Cloudpods runtime images | `ghcr.io/yinjiayi/*` |
@@ -130,6 +130,11 @@ manifest; use the architecture-specific tags recorded in the image lock files.
    exact artifact, adds the pinned source archives, and deploys the complete
    Pages site atomically; it does not rebuild it. Manual dispatch remains
    available.
+
+The Pages workflows also mirror the four checksum-verified RISC-V K3s release
+assets. The `yinjiayi/k3s` GitHub Release remains the provenance source, while
+ocboot uses the Pages mirror so installation does not depend on the separate
+GitHub release-asset CDN path.
 11. Tag the ocboot RISC-V branch, run `Build and publish ocboot RISC-V image`
     from this release repository, then verify its GHCR package is public.
 

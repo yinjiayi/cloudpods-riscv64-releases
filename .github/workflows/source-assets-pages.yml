@@ -94,6 +94,10 @@ jobs:
             sha256sum --check SHA256SUMS
           )
 
+      - name: Preserve checksum-verified K3s RISC-V release assets on Pages
+        shell: bash
+        run: ./scripts/stage-k3s-pages-assets.sh site
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
