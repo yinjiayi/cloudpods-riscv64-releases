@@ -7,7 +7,21 @@ lock_file=${repo_root}/images/cloudpods-images.lock
 output_dir=${repo_root}/dist
 output_file=${output_dir}/cloudpods-images-riscv64.digests
 
-[[ $(uname -m) == riscv64 ]]
+host_arch=$(uname -m)
+case "${host_arch}" in
+    riscv64)
+        ;;
+    x86_64)
+        [[ ${QEMU_USER_RISCV64:-0} == 1 ]]
+        binfmt_file=/proc/sys/fs/binfmt_misc/qemu-riscv64
+        [[ -r ${binfmt_file} ]]
+        grep -qx enabled "${binfmt_file}"
+        ;;
+    *)
+        echo "unsupported publish host architecture: ${host_arch}" >&2
+        exit 1
+        ;;
+esac
 : "${GITHUB_ACTOR:?GITHUB_ACTOR is required}"
 : "${GHCR_TOKEN:?GHCR_TOKEN is required}"
 printf '%s' "${GHCR_TOKEN}" | buildah login \

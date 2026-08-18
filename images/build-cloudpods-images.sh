@@ -4,10 +4,34 @@ set -Eeuo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 source "${repo_root}/versions.env"
 
-[[ $(uname -m) == riscv64 ]] || {
-    echo "this build requires a native riscv64 runner" >&2
-    exit 1
-}
+host_arch=$(uname -m)
+case "${host_arch}" in
+    riscv64)
+        execution_mode=native
+        ;;
+    x86_64)
+        [[ ${QEMU_USER_RISCV64:-0} == 1 ]] || {
+            echo "x86_64 builds require QEMU_USER_RISCV64=1" >&2
+            exit 1
+        }
+        binfmt_file=/proc/sys/fs/binfmt_misc/qemu-riscv64
+        [[ -r ${binfmt_file} ]] && grep -qx enabled "${binfmt_file}" || {
+            echo "enabled qemu-riscv64 binfmt registration is required" >&2
+            exit 1
+        }
+        qemu_interpreter=$(awk '$1 == "interpreter" {print $2}' "${binfmt_file}")
+        [[ -n ${qemu_interpreter} && -x ${qemu_interpreter} ]] || {
+            echo "qemu-riscv64 binfmt interpreter is not executable" >&2
+            exit 1
+        }
+        execution_mode=qemu-user
+        ;;
+    *)
+        echo "unsupported build host architecture: ${host_arch}" >&2
+        exit 1
+        ;;
+esac
+echo "RISC-V execution mode: ${execution_mode} (host: ${host_arch})"
 : "${GITHUB_ACTOR:?GITHUB_ACTOR is required}"
 : "${GHCR_TOKEN:?GHCR_TOKEN is required}"
 : "${DASHBOARD_DIST_DIR:?DASHBOARD_DIST_DIR is required}"
@@ -42,6 +66,22 @@ trap cleanup EXIT
 install -d -m 0755 "${source_dir}" "${stage_dir}"
 printf '%s' "${GHCR_TOKEN}" | buildah login \
     --username "${GITHUB_ACTOR}" --password-stdin ghcr.io
+
+builder_image=${GHCR_NAMESPACE}/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1
+if [[ ${execution_mode} == qemu-user ]]; then
+    qemu_smoke_builder=cloudpods-qemu-user-smoke-${builder_suffix}
+    buildah pull --arch riscv64 "${builder_image}"
+    buildah from --name "${qemu_smoke_builder}" "${builder_image}" >/dev/null
+    active_builders+=("${qemu_smoke_builder}")
+    buildah run "${qemu_smoke_builder}" -- sh -ec '
+        test "$(uname -m)" = riscv64
+        printf "package main\nfunc main() {}\n" >/tmp/qemu-smoke.go
+        go build -o /tmp/qemu-smoke /tmp/qemu-smoke.go
+        file /tmp/qemu-smoke | grep -F "UCB RISC-V"
+        /tmp/qemu-smoke
+    '
+    buildah rm "${qemu_smoke_builder}" >/dev/null
+fi
 
 clone_exact() {
     local repository=$1
@@ -196,8 +236,6 @@ apply_source_patch \
 apply_source_patch \
     "${source_dir}/onecloud-operator" \
     "${repo_root}/images/patches/onecloud-operator-disable-probe-kubelet.patch"
-
-builder_image=${GHCR_NAMESPACE}/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1
 
 new_builder cloudpods-operator-builder "${builder_image}"
 operator_builder=${BUILDER_NAME}
