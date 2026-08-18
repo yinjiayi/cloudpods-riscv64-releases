@@ -467,9 +467,9 @@ buildah run "${kubeserver_verifier}" -- sh -ec '
     command -v kubectl
     ansible-playbook --version
     kubectl version --client=true
-    version_output=$(/opt/yunion/bin/kubeserver --version)
-    printf "%s\n" "${version_output}" | grep -F '"gitVersion": "v4.0.3"'
-    printf "%s\n" "${version_output}" | grep -F '"platform": "linux/riscv64"'
+    version_output=$(/opt/yunion/bin/kubeserver --version 2>&1)
+    printf "%s\n" "${version_output}" | grep -F gitVersion | grep -F v4.0.3
+    printf "%s\n" "${version_output}" | grep -F platform | grep -F linux/riscv64
 '
 remove_builder "${kubeserver_verifier}"
 

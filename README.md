@@ -155,6 +155,12 @@ image lock files.
 7. Run `Build and publish Cloudpods RISC-V images` on the labelled x86_64 QEMU
    user-mode runner, make any new packages public, and verify
    `images/cloudpods-images.lock` the same way.
+   If the build has already produced all final local images but a post-build
+   assertion or registry push fails, fix the assertion and push a
+   `cloudpods-images-resume-riscv64-*` tag. The recovery workflow checks the
+   exact source revision, version, architecture, binaries, and runtime content
+   of every cached image before publishing; it never accepts or publishes an
+   unverified partial build.
 8. Run `Build openEuler RISC-V RPMs` and note its workflow run ID.
 9. Download that run's RPM artifact to the physical RISC-V host and run
    `sudo rpm/verify-qemu-kvm-rpm.sh PATH_TO_QEMU_RPM`.
