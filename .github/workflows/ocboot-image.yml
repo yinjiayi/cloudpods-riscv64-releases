@@ -106,6 +106,7 @@ jobs:
           else
             buildah bud \
               --arch riscv64 \
+              --layers \
               --network host \
               --label "org.opencontainers.image.source=https://github.com/yinjiayi/ocboot" \
               --label "org.opencontainers.image.revision=${OCBOOT_SOURCE_COMMIT}" \
