@@ -1,8 +1,9 @@
-localhost/cloudpods/cloudpods:v4.0.3-riscv64.4	ghcr.io/yinjiayi/cloudpods:v4.0.3-riscv64.4
-localhost/cloudpods/cloudpods:v4.0.3-riscv64.4	ghcr.io/yinjiayi/climc:v4.0.3-riscv64.4
-localhost/cloudpods/cloudpods:v4.0.3-riscv64.4	ghcr.io/yinjiayi/cloudproxy:v4.0.3-riscv64.4
-localhost/cloudpods/cloudpods:v4.0.3-riscv64.4	ghcr.io/yinjiayi/region-dns:v4.0.3-riscv64.4
-localhost/cloudpods/kubeserver:v4.0.3-riscv64.4	ghcr.io/yinjiayi/kubeserver:v4.0.3-riscv64.4
+localhost/cloudpods/cloudpods:v4.0.3-riscv64.5	ghcr.io/yinjiayi/cloudpods:v4.0.3-riscv64.5
+localhost/cloudpods/cloudpods:v4.0.3-riscv64.5	ghcr.io/yinjiayi/climc:v4.0.3-riscv64.5
+localhost/cloudpods/cloudpods:v4.0.3-riscv64.5	ghcr.io/yinjiayi/cloudproxy:v4.0.3-riscv64.5
+localhost/cloudpods/cloudpods:v4.0.3-riscv64.5	ghcr.io/yinjiayi/region-dns:v4.0.3-riscv64.5
+localhost/cloudpods/cloudpods:v4.0.3-riscv64.5	ghcr.io/yinjiayi/baremetal-agent:v4.0.3-riscv64.5
+localhost/cloudpods/kubeserver:v4.0.3-riscv64.5	ghcr.io/yinjiayi/kubeserver:v4.0.3-riscv64.5
 localhost/cloudpods/onecloud-operator:v4.0.3-riscv64.3	ghcr.io/yinjiayi/onecloud-operator:v4.0.3-riscv64.3
 localhost/cloudpods/web:v4.0.3-riscv64-ui2	ghcr.io/yinjiayi/cloudpods-web:v4.0.3-riscv64-ui2
 localhost/cloudpods/etcd:3.5.24	ghcr.io/yinjiayi/etcd:3.5.24-riscv64.1

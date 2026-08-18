@@ -19,7 +19,7 @@ checked against SHA-256 digests before a release is published.
 | klipper-helm | upstream source plus `k3s-io/klipper-helm` PR 64, commit `8a71d64` |
 | klipper-lb | upstream source plus `k3s-io/klipper-lb` PR 56, commit `faaeca6` |
 | K3s build bases | architecture-specific upstream digests mirrored by a hosted runner to `ghcr.io/yinjiayi` before native RISC-V builds |
-| Cloudpods QEMU | signed `download.qemu.org` source `10.0.7` |
+| Cloudpods QEMU | signed `download.qemu.org` source `10.0.7`; the RPM bundles the openEuler glibc runtime needed inside the Alpine host pod, and any runtime-only repackage is pinned to a previously KVM-validated RPM SHA-256 before QMP and physical KVM revalidation |
 | Actions Runner QEMU | signed `download.qemu.org` source `11.1.0`, `x86_64-linux-user` only |
 | GitHub Actions Runner | official `actions/runner` x64 release `2.336.0`, SHA-256 pinned |
 | Runner .NET compatibility | deterministic Mono.Cecil `0.11.6` transform of the pinned Json.NET DLL plus the .NET 8 `ForceInterpretedInvoke` and `RuntimeFeature.IsDynamicCodeSupported=false` AppContext settings on Listener, Worker, and PluginHost; tiered compilation and dynamic PGO are disabled for the emulated control processes |

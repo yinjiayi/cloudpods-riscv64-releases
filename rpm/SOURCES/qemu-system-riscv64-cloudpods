@@ -1,12 +1,23 @@
-#!/usr/bin/bash
+#!/bin/bash
 set -e
 
 REAL_QEMU=/usr/local/qemu-10.0.7/bin/qemu-system-riscv64.real
+BUNDLED_LOADER=/usr/local/qemu-10.0.7/lib/ld-linux-riscv64-lp64d.so.1
+BUNDLED_LIBRARY_PATH=/usr/local/qemu-10.0.7/lib
 acpi_was_set=false
 metadata_only=false
 previous_arg=
 qemu_args=()
 vhost_net_available=false
+
+run_qemu() {
+    if test -x "${BUNDLED_LOADER}"; then
+        exec "${BUNDLED_LOADER}" \
+            --library-path "${BUNDLED_LIBRARY_PATH}" \
+            "${REAL_QEMU}" "$@"
+    fi
+    exec -a "$0" "${REAL_QEMU}" "$@"
+}
 
 if test -c /dev/vhost-net; then
     vhost_net_available=true
@@ -29,23 +40,24 @@ for arg in "$@"; do
         *acpi=*|-no-acpi)
             acpi_was_set=true
             ;;
-        --version|-version|--help|-help|-h)
+        --version|-version|--help|-help|-h|-machine=none|-machine=none,*|-M=none|-M=none,*)
             metadata_only=true
             ;;
     esac
 
     if { test "${previous_arg}" = "-machine" || test "${previous_arg}" = "-M"; } \
-        && { test "${arg}" = "help" || test "${arg}" = "?"; }; then
-        metadata_only=true
+        && { test "${arg}" = "help" || test "${arg}" = "?" \
+            || test "${arg}" = "none" || [[ "${arg}" == none,* ]]; }; then
+            metadata_only=true
     fi
     previous_arg="${arg}"
 done
 
 if ${acpi_was_set} || ${metadata_only}; then
-    exec -a "$0" "${REAL_QEMU}" "${qemu_args[@]}"
+    run_qemu "${qemu_args[@]}"
 fi
 
 # The official openEuler RISC-V VM startup script uses acpi=off.  Keep that
 # stable default for Cloudpods, while allowing an explicit caller setting to
 # override it.
-exec -a "$0" "${REAL_QEMU}" "${qemu_args[@]}" -machine acpi=off
+run_qemu "${qemu_args[@]}" -machine acpi=off

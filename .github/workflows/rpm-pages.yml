@@ -63,6 +63,18 @@ jobs:
           run-id: ${{ steps.attestation.outputs.build_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install repository tooling for a pinned QEMU runtime overlay
+        if: ${{ hashFiles('rpm/qemu-runtime-hotfix.env') != '' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y createrepo-c
+
+      - name: Overlay the physically validated QEMU runtime package
+        if: ${{ hashFiles('rpm/qemu-runtime-hotfix.env') != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./rpm/stage-qemu-runtime-hotfix.sh validated
+
       - name: Match the physical-host KVM attestation
         shell: bash
         env:

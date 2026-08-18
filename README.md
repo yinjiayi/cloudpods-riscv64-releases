@@ -109,6 +109,11 @@ The target openEuler 24.03 LTS SP3 RISC-V repositories do not publish the
 `librbd1` and `librados2` runtime packages, so this QEMU build explicitly
 disables optional Ceph RBD support and rejects an RPM that regains either
 unresolvable library dependency. Local host storage remains supported.
+The QEMU RPM also carries its exact glibc loader and runtime-library closure:
+Cloudpods mounts `/usr/local/qemu-10.0.7` into an Alpine host pod, where a
+host-linked openEuler ELF cannot otherwise start. Physical acceptance checks
+the wrapper, `qemu-img`, the Cloudpods `-machine none` QMP query, and a real
+`/dev/kvm` process before the RPM is eligible for Pages.
 
 KubeServer itself keeps its required Ceph CGO support. Its native RISC-V link
 uses the pinned Alpine `lld20` package from the published
@@ -161,6 +166,10 @@ image lock files.
    exact source revision, version, architecture, binaries, and runtime content
    of every cached image before publishing; it never accepts or publishes an
    unverified partial build.
+   The same workflow can assemble the pinned resource-only `.5` layer from the
+   verified `.4` cache, restores CloudID's nine SAML metadata files from the
+   exact Cloudpods source commit, and emits matching KubeServer version
+   metadata without recompiling unchanged binaries.
 8. Run `Build openEuler RISC-V RPMs` and note its workflow run ID.
 9. Download that run's RPM artifact to the physical RISC-V host and run
    `sudo rpm/verify-qemu-kvm-rpm.sh PATH_TO_QEMU_RPM`.
@@ -170,6 +179,12 @@ image lock files.
    exact artifact, adds the pinned source archives, and deploys the complete
    Pages site atomically; it does not rebuild it. Manual dispatch remains
    available.
+   For a wrapper/runtime-only QEMU correction, run
+   `rpm/repackage-qemu-runtime-rpm.sh` on the physical host, validate the
+   result with `rpm/verify-qemu-kvm-rpm.sh`, publish both RPMs as the release
+   named by `rpm/qemu-runtime-hotfix.env`, and record their hashes. The Pages
+   workflow overlays only those two pinned packages on the previously
+   validated repository and regenerates its metadata and checksums.
 
 The Pages workflows also mirror the four checksum-verified RISC-V K3s release
 assets. The `yinjiayi/k3s` GitHub Release remains the provenance source, while

@@ -35,6 +35,11 @@ jobs:
           echo "RELEASE_SOURCE_ROOT=${source_root}" >> "${GITHUB_ENV}"
           echo "RELEASE_SOURCE_ARCHIVE=${source_archive}" >> "${GITHUB_ENV}"
 
+      - name: Assemble the resource-complete Cloudpods image
+        env:
+          QEMU_USER_RISCV64: '1'
+        run: "${RELEASE_SOURCE_ROOT}/images/build-cloudpods-resource-hotfix.sh"
+
       - name: Verify exact cached images and RISC-V runtime contents
         env:
           QEMU_USER_RISCV64: '1'

@@ -106,6 +106,8 @@ buildah run --env "CLOUDPODS_BINARIES=${cloudpods_binary_list}" \
     done
     test -d /opt/yunion/share/template/title@cn
     test -d /opt/yunion/share/local-templates/content@cn
+    test "$(find /opt/yunion/share/saml/sp-metadata -maxdepth 1 -type f -name "*.xml" | wc -l)" -eq 9
+    test -f /opt/yunion/share/saml/sp-metadata/gcp.xml
     kubectl version --client=true
 '
 remove_builder "${cloudpods_verifier}"

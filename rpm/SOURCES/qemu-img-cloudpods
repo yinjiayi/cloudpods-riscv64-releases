@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+prefix=/usr/local/qemu-10.0.7
+loader=${prefix}/lib/ld-linux-riscv64-lp64d.so.1
+library_path=${prefix}/lib
+real_qemu_img=${prefix}/bin/qemu-img.real
+
+if test -x "${loader}"; then
+    exec "${loader}" --library-path "${library_path}" \
+        "${real_qemu_img}" "$@"
+fi
+exec "${real_qemu_img}" "$@"
