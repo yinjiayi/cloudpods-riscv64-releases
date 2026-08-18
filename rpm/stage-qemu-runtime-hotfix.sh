@@ -19,11 +19,13 @@ source "${hotfix_env}"
 
 download_dir=$(mktemp -d "${RUNNER_TEMP:-/tmp}/qemu-runtime-hotfix.XXXXXX")
 trap 'rm -rf -- "${download_dir}"' EXIT
-GH_PAGER=cat gh release download "${QEMU_RUNTIME_RELEASE_TAG}" \
-    --repo "${GITHUB_REPOSITORY:-yinjiayi/cloudpods-riscv64-releases}" \
-    --dir "${download_dir}" \
-    --pattern "${QEMU_RUNTIME_RPM}" \
-    --pattern "${QEMU_RUNTIME_SRPM}"
+repository=${GITHUB_REPOSITORY:-yinjiayi/cloudpods-riscv64-releases}
+release_base=https://github.com/${repository}/releases/download/${QEMU_RUNTIME_RELEASE_TAG}
+for asset in "${QEMU_RUNTIME_RPM}" "${QEMU_RUNTIME_SRPM}"; do
+    curl --fail --location --retry 10 --retry-all-errors \
+        --connect-timeout 20 --max-time 1800 \
+        "${release_base}/${asset}" --output "${download_dir}/${asset}"
+done
 echo "${QEMU_RUNTIME_RPM_SHA256}  ${download_dir}/${QEMU_RUNTIME_RPM}" |
     sha256sum --check
 echo "${QEMU_RUNTIME_SRPM_SHA256}  ${download_dir}/${QEMU_RUNTIME_SRPM}" |

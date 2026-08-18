@@ -46,7 +46,7 @@ The Cloudpods image runner must provide:
 
 - x86_64 Linux with the `cloudpods-riscv64-qemu` Actions label
 - an enabled `qemu-riscv64` binfmt handler with persistent-open flags
-- Buildah, Skopeo, Git, Curl, jq, `file`, and SHA-256 tools
+- Buildah, Skopeo, Git, Curl, jq, `file`, `createrepo_c`, and SHA-256 tools
 - at least 32 GiB RAM and 120 GiB free disk
 
 The workflow requires `QEMU_USER_RISCV64=1`, verifies the registered

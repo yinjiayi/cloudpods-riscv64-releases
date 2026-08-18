@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   validate-artifact:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64, cloudpods-riscv64-qemu]
     steps:
       - uses: actions/checkout@v4
 
@@ -63,11 +63,9 @@ jobs:
           run-id: ${{ steps.attestation.outputs.build_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install repository tooling for a pinned QEMU runtime overlay
+      - name: Verify native repository tooling for the QEMU runtime overlay
         if: ${{ hashFiles('rpm/qemu-runtime-hotfix.env') != '' }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y createrepo-c
+        run: createrepo_c --version
 
       - name: Overlay the physically validated QEMU runtime package
         if: ${{ hashFiles('rpm/qemu-runtime-hotfix.env') != '' }}
