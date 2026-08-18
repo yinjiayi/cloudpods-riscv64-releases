@@ -2,6 +2,8 @@ FROM ghcr.io/yinjiayi/cloudpods-host-deployer-base:1.5.9-riscv64.1
 
 ARG SOURCE_COMMIT
 ARG VERSION
+ARG ALPINE_MIRROR=https://mirrors.aliyun.com/alpine
+ARG ALPINE_BRANCH=v3.22
 LABEL org.opencontainers.image.source="https://github.com/yinjiayi/cloudpods" \
       org.opencontainers.image.revision="${SOURCE_COMMIT}" \
       org.opencontainers.image.version="${VERSION}"
@@ -9,7 +11,9 @@ LABEL org.opencontainers.image.source="https://github.com/yinjiayi/cloudpods" \
 ENV TZ=UTC \
     ETCD_UNSUPPORTED_ARCH=riscv64
 
-RUN apk update && \
+RUN printf '%s/%s/main\n%s/%s/community\n' \
+      "${ALPINE_MIRROR}" "${ALPINE_BRANCH}" \
+      "${ALPINE_MIRROR}" "${ALPINE_BRANCH}" >/etc/apk/repositories && \
     apk add --no-cache \
       bash bind-tools busybox-extras coreutils dmidecode dropbear e2fsprogs etcd etcd-ctl ethtool \
       ipmitool iproute2 iptables kmod lsof openvswitch openssh-client-default \

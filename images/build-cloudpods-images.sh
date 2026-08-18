@@ -410,7 +410,7 @@ web_image=localhost/cloudpods/web:${CLOUDPODS_WEB_IMAGE_VERSION}
 etcd_image=localhost/cloudpods/etcd:3.5.24
 kubeserver_image=localhost/cloudpods/kubeserver:${KUBESERVER_IMAGE_VERSION}
 
-buildah bud --arch riscv64 --layers \
+buildah bud --arch riscv64 --layers --network host \
     --build-arg "SOURCE_COMMIT=${CLOUDPODS_SOURCE_COMMIT}" \
     --build-arg "VERSION=${CLOUDPODS_IMAGE_VERSION}" \
     --tag "${cloudpods_image}" \
@@ -428,7 +428,7 @@ buildah bud --arch riscv64 --layers \
     --tag "${web_image}" \
     --file "${repo_root}/images/Containerfile.web" \
     "${web_stage}"
-buildah bud --arch riscv64 --layers \
+buildah bud --arch riscv64 --layers --network host \
     --build-arg "BASE_IMAGE=${GHCR_NAMESPACE}/cloudpods-onecloud-base:v3.22.2-0-riscv64.1" \
     --build-arg "SOURCE_COMMIT=${KUBECOMPS_SOURCE_COMMIT}" \
     --build-arg "VERSION=${KUBESERVER_IMAGE_VERSION}" \
