@@ -191,7 +191,8 @@ assets. The `yinjiayi/k3s` GitHub Release remains the provenance source, while
 ocboot uses the Pages mirror so installation does not depend on the separate
 GitHub release-asset CDN path.
 11. Tag the ocboot RISC-V branch, run `Build and publish ocboot RISC-V image`
-    from this release repository, then verify its GHCR package is public.
+    on the labelled x86_64 QEMU user-mode runner, then verify its GHCR package
+    is public.
 
 Packages linked to this public source repository currently inherit Public
 visibility. Always confirm the package settings and run the anonymous

@@ -12,13 +12,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: [self-hosted, linux, riscv64, openeuler-24.03-riscv64]
-    # The x86_64 Actions Worker runs through QEMU user mode on this native
-    # RISC-V host.  A rare post-job .NET serialization crash can mark the job
-    # failed after every build step and GHCR push succeeded.  The hosted
-    # verify-public job below is the release gate and checks the exact source
-    # revision, so let it run even when only the emulated result reporter dies.
-    continue-on-error: true
+    runs-on: [self-hosted, Linux, X64, cloudpods-riscv64-qemu]
     timeout-minutes: 120
     steps:
       - name: Fetch pinned workflow source with native curl
@@ -87,7 +81,9 @@ jobs:
             buildah rm "${verifier}" >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
-          test "$(uname -m)" = riscv64
+          test "$(uname -m)" = x86_64
+          test -r /proc/sys/fs/binfmt_misc/qemu-riscv64
+          grep -Fxq enabled /proc/sys/fs/binfmt_misc/qemu-riscv64
           printf '%s' "${GHCR_TOKEN}" | buildah login ghcr.io \
             --username "${GITHUB_ACTOR}" --password-stdin
 
@@ -123,7 +119,7 @@ jobs:
   verify-public:
     needs: build
     if: ${{ always() }}
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64, cloudpods-riscv64-qemu]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -132,8 +128,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           source versions.env
-          sudo apt-get update
-          sudo apt-get install -y jq skopeo
+          command -v jq
+          command -v skopeo
           metadata=$(skopeo inspect --override-os linux --override-arch riscv64 \
             "docker://ghcr.io/yinjiayi/ocboot:${OCBOOT_VERSION}")
           test "$(jq -r .Architecture <<<"${metadata}")" = riscv64
