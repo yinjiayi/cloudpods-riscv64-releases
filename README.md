@@ -33,6 +33,11 @@ run natively on a self-hosted RISC-V machine labelled
 `openeuler-24.03-riscv64`, except for the cross-compiled K3s binary in the K3s
 fork.
 
+The dashboard distribution and K3s binary enter the native Cloudpods build
+through a checksum-pinned RISC-V build-assets image. Its immutable manifest
+digest is recorded in `versions.env`, so rebuilding release scripts does not
+rebuild or redownload unchanged web/K3s inputs on the native runner.
+
 ## Required runner
 
 The native runner must provide:
@@ -84,6 +89,13 @@ The target openEuler 24.03 LTS SP3 RISC-V repositories do not publish the
 `librbd1` and `librados2` runtime packages, so this QEMU build explicitly
 disables optional Ceph RBD support and rejects an RPM that regains either
 unresolvable library dependency. Local host storage remains supported.
+
+KubeServer itself keeps its required Ceph CGO support. Its native RISC-V link
+uses the pinned Alpine `lld20` package from the published
+`cloudpods-kube-build` derivative because GNU ld 2.44 crashes while processing
+the generated RISC-V relocation stream. The workflow compiles and runs a small
+LLD-linked RISC-V ELF before it builds KubeServer, then runs the finished
+KubeServer binary again from the final runtime image.
 
 The workflows use the repository-scoped `GITHUB_TOKEN`; no personal access
 token is stored in repository secrets.

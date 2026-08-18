@@ -17,6 +17,7 @@ registry.cn-beijing.aliyuncs.com/yunionio/telegraf-init@sha256:96e004318ec36c180
 registry.cn-beijing.aliyuncs.com/yunionio/telegraf@sha256:2e4bd46792b2403490753d0659db80930630e528e68cb97484c8c8b1efc51a04	ghcr.io/yinjiayi/telegraf:release-1.36.4-6
 registry.cn-beijing.aliyuncs.com/yunionio/alpine-build:3.22.2-go-1.24.9-0@sha256:20d1094020e48b54d94d27ec4d511d53555f7619c842cd5fe0ce3a6b3fe8ad80	ghcr.io/yinjiayi/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1
 registry.cn-beijing.aliyuncs.com/yunionio/kube-build:3.22.2-go-1.24.9-0@sha256:b1e1f7cec95f94aa395815c4184c99f3bbf2c55560756074a15a546e5ad7959e	ghcr.io/yinjiayi/cloudpods-kube-build:3.22.2-go-1.24.9-0-riscv64.1
+localhost/cloudpods/cloudpods-kube-build:3.22.2-go-1.24.9-0-riscv64.2	ghcr.io/yinjiayi/cloudpods-kube-build:3.22.2-go-1.24.9-0-riscv64.2
 registry.cn-beijing.aliyuncs.com/yunionio/helm:v4.0.0-1@sha256:b4a0e605737002454cf643b3bd9aed0b40faa132ea3b8463bf25eebd07f5942a	ghcr.io/yinjiayi/cloudpods-helm:v4.0.0-1-riscv64.1
 registry.cn-beijing.aliyuncs.com/yunionio/onecloud-base:v3.22.2-0@sha256:b4a2fdd45c75eda64a8c840b198e9b6a0b50c3b3341e7f05fc2a645760e4d269	ghcr.io/yinjiayi/cloudpods-onecloud-base:v3.22.2-0-riscv64.1
 registry.cn-beijing.aliyuncs.com/yunionio/host-deployer-base:1.5.9@sha256:5a4dd55bae8e334b7e097b20bf8d9d74f902b75d8f5c75d838756ac5a7cb9f65	ghcr.io/yinjiayi/cloudpods-host-deployer-base:1.5.9-riscv64.1

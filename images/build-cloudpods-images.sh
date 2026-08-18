@@ -217,14 +217,31 @@ buildah run \
     /bin/bash -ec 'cd /src; ./scripts/embed-helm-pkgs.sh; test -f static/monitor-stack-8.12.13.tgz; test -f static/minio-8.0.6.tgz; test -f static/linux-server_rev1.json'
 remove_builder "${helm_packager}"
 
-kube_builder_image=${GHCR_NAMESPACE}/cloudpods-kube-build:3.22.2-go-1.24.9-0-riscv64.1
+kube_builder_image=localhost/cloudpods/cloudpods-kube-build:${CLOUDPODS_KUBE_BUILD_IMAGE_VERSION}
+buildah bud --arch riscv64 --layers \
+    --build-arg "BASE_IMAGE=${GHCR_NAMESPACE}/cloudpods-kube-build:3.22.2-go-1.24.9-0-riscv64.1" \
+    --build-arg "LLD_VERSION=${CLOUDPODS_KUBE_BUILD_LLD_VERSION}" \
+    --tag "${kube_builder_image}" \
+    --file "${repo_root}/images/Containerfile.kube-build-lld" \
+    "${repo_root}/images"
+
+new_builder kubeserver-linker-verifier "${kube_builder_image}"
+kubeserver_linker_verifier=${BUILDER_NAME}
+buildah run "${kubeserver_linker_verifier}" -- sh -ec '
+    ld.lld --version | grep -F "LLD 20.1.8"
+    printf "int main(void) { return 0; }\n" >/tmp/lld-smoke.c
+    gcc -fuse-ld=lld /tmp/lld-smoke.c -o /tmp/lld-smoke
+    /tmp/lld-smoke
+'
+remove_builder "${kubeserver_linker_verifier}"
+
 new_builder kubeserver-builder "${kube_builder_image}"
 kubeserver_builder=${BUILDER_NAME}
 buildah run \
     --env GOPROXY=https://goproxy.cn,direct \
     --volume "${source_dir}/kubecomps:/src:rw" \
     "${kubeserver_builder}" -- \
-    sh -ec "cd /src; go generate -mod vendor ./pkg/kubeserver/embed; install -d _output/alpine-build/bin; make GOARCH=riscv64 BIN_DIR=/src/_output/alpine-build/bin GIT_BRANCH=${KUBECOMPS_SOURCE_REF} GIT_COMMIT=${KUBECOMPS_SOURCE_COMMIT} GIT_VERSION=v4.0.3 GIT_TREE_STATE=clean BUILD_DATE=${KUBECOMPS_SOURCE_DATE} cmd/kubeserver; test -x _output/alpine-build/bin/kubeserver"
+    sh -ec "cd /src; go generate -mod vendor ./pkg/kubeserver/embed; install -d _output/alpine-build/bin; CC='gcc -fuse-ld=lld' make GOARCH=riscv64 BIN_DIR=/src/_output/alpine-build/bin GIT_BRANCH=${KUBECOMPS_SOURCE_REF} GIT_COMMIT=${KUBECOMPS_SOURCE_COMMIT} GIT_VERSION=v4.0.3 GIT_TREE_STATE=clean BUILD_DATE=${KUBECOMPS_SOURCE_DATE} cmd/kubeserver; test -x _output/alpine-build/bin/kubeserver"
 remove_builder "${kubeserver_builder}"
 
 new_builder cloudpods-core-builder "${builder_image}"
@@ -393,7 +410,9 @@ buildah run "${kubeserver_verifier}" -- sh -ec '
     command -v kubectl
     ansible-playbook --version
     kubectl version --client=true
-    /opt/yunion/bin/kubeserver --help >/dev/null
+    version_output=$(/opt/yunion/bin/kubeserver --version)
+    printf "%s\n" "${version_output}" | grep -F '"gitVersion": "v4.0.3"'
+    printf "%s\n" "${version_output}" | grep -F '"platform": "linux/riscv64"'
 '
 remove_builder "${kubeserver_verifier}"
 

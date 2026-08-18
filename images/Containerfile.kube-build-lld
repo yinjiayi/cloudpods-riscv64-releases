@@ -1,0 +1,10 @@
+ARG BASE_IMAGE=ghcr.io/yinjiayi/cloudpods-kube-build:3.22.2-go-1.24.9-0-riscv64.1
+FROM ${BASE_IMAGE}
+
+ARG LLD_VERSION=20.1.8-r0
+
+RUN apk add --no-cache "lld20=${LLD_VERSION}" \
+    && ld.lld --version | grep -F "LLD 20.1.8"
+
+LABEL org.opencontainers.image.source="https://github.com/yinjiayi/cloudpods-riscv64-releases" \
+      org.opencontainers.image.description="Cloudpods RISC-V KubeServer builder with LLVM lld"
