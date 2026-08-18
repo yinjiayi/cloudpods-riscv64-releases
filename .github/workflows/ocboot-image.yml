@@ -98,6 +98,7 @@ jobs:
           else
             buildah bud \
               --arch riscv64 \
+              --network host \
               --label "org.opencontainers.image.source=https://github.com/yinjiayi/ocboot" \
               --label "org.opencontainers.image.revision=${OCBOOT_SOURCE_COMMIT}" \
               --file "${OCBOOT_SOURCE_ROOT}/Dockerfile.riscv64" \
