@@ -108,7 +108,7 @@ manifest; use the architecture-specific tags recorded in the image lock files.
 
 1. Run `Publish Actions Runner RISC-V compatibility asset` once for the pinned
    Runner version, then install and register the RISC-V build runner.
-2. Export the pinned Cloudpods and ocboot commits, verify
+2. Export every pinned native-build source commit, verify
    `source-assets/SHA256SUMS`, and publish them under the source-asset release
    tag recorded in `versions.env`; then run `Publish native-build source assets
    to Pages` so the RISC-V runner uses the resumable Pages mirror. When a

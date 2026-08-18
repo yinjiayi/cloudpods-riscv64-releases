@@ -53,7 +53,9 @@ clone_exact() {
     local cache_dir=${CLOUDPODS_SOURCE_CACHE_DIR:-}
     local repository_path
     local source_archive
+    local source_asset
     local source_name
+    local source_page_url
 
     repository_path=${repository#https://github.com/}
     repository_path=${repository_path%.git}
@@ -61,17 +63,24 @@ clone_exact() {
     [[ -n ${source_ref} ]]
     [[ ${source_sha256} =~ ^[0-9a-f]{64}$ ]]
     source_name=$(basename "${repository_path}")
-    source_archive=${work_root}/${source_name}-${source_commit}.tar.gz
+    source_asset=${source_name}-${source_commit}.tar.gz
+    source_archive=${work_root}/${source_asset}
+    source_page_url=${SOURCE_ASSET_PAGE_BASE_URL}/${source_asset}
     cache_archive=${cache_dir:+${cache_dir}/${source_name}-${source_commit}.tar.gz}
     if [[ -n ${cache_archive} && -f ${cache_archive} ]] && \
         echo "${source_sha256}  ${cache_archive}" | sha256sum --check --status; then
         echo "Using verified source cache: ${cache_archive}"
         install -m 0644 "${cache_archive}" "${source_archive}"
     else
-        curl --fail --location --retry 10 --retry-all-errors \
-            --connect-timeout 20 --max-time 600 \
-            "https://codeload.github.com/${repository_path}/tar.gz/${source_commit}" \
-            --output "${source_archive}"
+        if ! curl --fail --location --retry 5 --retry-all-errors \
+            --continue-at - --connect-timeout 20 --max-time 1800 \
+            "${source_page_url}" --output "${source_archive}"; then
+            rm -f "${source_archive}"
+            curl --fail --location --retry 10 --retry-all-errors \
+                --connect-timeout 20 --max-time 600 \
+                "https://codeload.github.com/${repository_path}/tar.gz/${source_commit}" \
+                --output "${source_archive}"
+        fi
     fi
     echo "${source_sha256}  ${source_archive}" | sha256sum --check
     if [[ -n ${cache_archive} ]]; then

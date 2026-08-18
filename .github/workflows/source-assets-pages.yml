@@ -80,7 +80,17 @@ jobs:
           fi
           release_base=https://github.com/yinjiayi/cloudpods-riscv64-releases/releases/download/${CLOUDPODS_SOURCE_ASSET_TAG}
           install -d -m 0755 site/source-assets
-          for asset in "${CLOUDPODS_SOURCE_ARCHIVE}" "${OCBOOT_SOURCE_ARCHIVE}"; do
+          source_assets=(
+            "${CLOUDPODS_SOURCE_ARCHIVE}"
+            "${OCBOOT_SOURCE_ARCHIVE}"
+            "${ONECLOUD_OPERATOR_SOURCE_ARCHIVE}"
+            "${KUBECOMPS_SOURCE_ARCHIVE}"
+            "${KUBESPRAY_LEGACY_SOURCE_ARCHIVE}"
+            "${KUBESPRAY_2_17_SOURCE_ARCHIVE}"
+            "${KUBESPRAY_2_19_SOURCE_ARCHIVE}"
+            "${SDNAGENT_SOURCE_ARCHIVE}"
+          )
+          for asset in "${source_assets[@]}"; do
             curl --fail --location --retry 10 --retry-all-errors \
               --connect-timeout 20 --max-time 600 \
               "${release_base}/${asset}" \
