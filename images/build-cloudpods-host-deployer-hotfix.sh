@@ -44,11 +44,11 @@ else
     release_url=https://github.com/yinjiayi/cloudpods-riscv64-releases/releases/download/${CLOUDPODS_SOURCE_ASSET_TAG}/${CLOUDPODS_SOURCE_ARCHIVE}
     if ! curl --fail --location --retry 10 --retry-all-errors \
         --connect-timeout 20 --max-time 1800 \
-        "${pages_url}" --output "${source_archive}"; then
+        "${release_url}" --output "${source_archive}"; then
         rm -f "${source_archive}"
         curl --fail --location --retry 10 --retry-all-errors \
             --connect-timeout 20 --max-time 900 \
-            "${release_url}" --output "${source_archive}"
+            "${pages_url}" --output "${source_archive}"
     fi
     echo "${CLOUDPODS_SOURCE_ARCHIVE_SHA256}  ${source_archive}" | \
         sha256sum --check
