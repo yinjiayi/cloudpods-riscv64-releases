@@ -1,0 +1,11 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG SOURCE_COMMIT
+ARG VERSION
+LABEL org.opencontainers.image.source="https://github.com/yinjiayi/cloudpods" \
+      org.opencontainers.image.revision="${SOURCE_COMMIT}" \
+      org.opencontainers.image.version="${VERSION}"
+
+COPY host-deployer /opt/yunion/bin/host-deployer
+

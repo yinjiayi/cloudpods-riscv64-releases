@@ -82,6 +82,14 @@ if ! buildah inspect "${base_image}" >/dev/null 2>&1; then
     buildah tag "${public_base}" "${base_image}"
 fi
 [[ $(buildah inspect --format '{{.OCIv1.Architecture}}' "${base_image}") == riscv64 ]]
+base_revision=$(buildah inspect --format \
+    '{{ index .OCIv1.Config.Labels "org.opencontainers.image.revision" }}' \
+    "${base_image}")
+if [[ ${base_revision} != "${CLOUDPODS_SOURCE_COMMIT}" ]]; then
+    echo "resource-only recovery cannot replace binaries from ${base_revision} with metadata for ${CLOUDPODS_SOURCE_COMMIT}" >&2
+    echo "run the pinned Cloudpods build or host-deployer hotfix workflow" >&2
+    exit 1
+fi
 
 work_root=$(mktemp -d "${RUNNER_TEMP:-/tmp}/cloudpods-resource-hotfix.XXXXXX")
 trap 'rm -rf -- "${work_root}"' EXIT

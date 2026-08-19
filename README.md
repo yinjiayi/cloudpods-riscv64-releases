@@ -15,7 +15,7 @@ release assets, the GHCR image names, and the RPM repository from the
 of this delivery.
 
 Customer deployment steps are in the
-[openEuler RISC-V single-node guide](https://github.com/yinjiayi/ocboot/blob/v4.0.3-riscv64.12/docs/customer-deployment-openeuler-riscv64.md).
+[openEuler RISC-V single-node guide](https://github.com/yinjiayi/ocboot/blob/v4.0.3-riscv64.14/docs/customer-deployment-openeuler-riscv64.md).
 
 ## Release layout
 
@@ -160,6 +160,10 @@ image lock files.
 7. Run `Build and publish Cloudpods RISC-V images` on the labelled x86_64 QEMU
    user-mode runner, make any new packages public, and verify
    `images/cloudpods-images.lock` the same way.
+   For a host-deployer-only correction, use `Build Cloudpods RISC-V
+   host-deployer hotfix`; it compiles the pinned `riscv64` binary, overlays it
+   on the exact previous Cloudpods image, validates the new guest signature,
+   and publishes a new immutable version without rebuilding unrelated binaries.
    If the build has already produced all final local images but a post-build
    assertion or registry push fails, fix the assertion and push a
    `cloudpods-images-resume-riscv64-*` tag. The recovery workflow checks the

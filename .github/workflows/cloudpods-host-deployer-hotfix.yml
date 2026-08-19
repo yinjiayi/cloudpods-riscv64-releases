@@ -1,0 +1,64 @@
+name: Build Cloudpods RISC-V host-deployer hotfix
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'cloudpods-host-deployer-riscv64-*'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: [self-hosted, Linux, X64, cloudpods-riscv64-qemu]
+    timeout-minutes: 180
+    steps:
+      - name: Fetch pinned workflow source with native curl
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          source_root=${RUNNER_TEMP}/cloudpods-riscv64-releases-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+          source_archive=${source_root}.tar.gz
+          install -d -m 0755 "${source_root}"
+          curl --fail --location --retry 10 --retry-all-errors \
+            --connect-timeout 20 --max-time 600 \
+            --output "${source_archive}" \
+            "https://codeload.github.com/${GITHUB_REPOSITORY}/tar.gz/${GITHUB_SHA}"
+          tar -C "${source_root}" --strip-components=1 -xzf "${source_archive}"
+          test -x "${source_root}/images/build-cloudpods-host-deployer-hotfix.sh"
+          echo "RELEASE_SOURCE_ROOT=${source_root}" >> "${GITHUB_ENV}"
+
+      - name: Build, verify, and publish the host-deployer hotfix
+        env:
+          CLOUDPODS_SOURCE_CACHE_DIR: /var/cache/cloudpods-build
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          QEMU_USER_RISCV64: '1'
+        run: "${RELEASE_SOURCE_ROOT}/images/build-cloudpods-host-deployer-hotfix.sh"
+
+  verify-public:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify anonymous RISC-V pulls
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq skopeo
+          scripts/write-image-digests.sh \
+            images/cloudpods-images.lock \
+            dist/cloudpods-images-riscv64.digests \
+            riscv64
+
+      - name: Upload digest lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudpods-host-deployer-riscv64-digests
+          if-no-files-found: error
+          path: |
+            dist/cloudpods-images-riscv64.digests
+            dist/cloudpods-images-riscv64.digests.sha256
+
