@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   validate-artifact:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64, cloudpods-riscv64-qemu]
     steps:
       - uses: actions/checkout@v4
 
@@ -62,6 +62,16 @@ jobs:
           path: validated
           run-id: ${{ steps.attestation.outputs.build_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify native repository tooling for the QEMU runtime overlay
+        if: ${{ hashFiles('rpm/qemu-runtime-hotfix.env') != '' }}
+        run: createrepo_c --version
+
+      - name: Overlay the physically validated QEMU runtime package
+        if: ${{ hashFiles('rpm/qemu-runtime-hotfix.env') != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./rpm/stage-qemu-runtime-hotfix.sh validated
 
       - name: Match the physical-host KVM attestation
         shell: bash

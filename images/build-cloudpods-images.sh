@@ -3,11 +3,47 @@ set -Eeuo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 source "${repo_root}/versions.env"
+source "${repo_root}/images/lib-riscv64-image-mirror.sh"
 
-[[ $(uname -m) == riscv64 ]] || {
-    echo "this build requires a native riscv64 runner" >&2
-    exit 1
-}
+host_arch=$(uname -m)
+case "${host_arch}" in
+    riscv64)
+        execution_mode=native
+        ;;
+    x86_64)
+        [[ ${QEMU_USER_RISCV64:-0} == 1 ]] || {
+            echo "x86_64 builds require QEMU_USER_RISCV64=1" >&2
+            exit 1
+        }
+        binfmt_file=/proc/sys/fs/binfmt_misc/qemu-riscv64
+        [[ -r ${binfmt_file} ]] && grep -qx enabled "${binfmt_file}" || {
+            echo "enabled qemu-riscv64 binfmt registration is required" >&2
+            exit 1
+        }
+        qemu_interpreter=$(awk '$1 == "interpreter" {print $2}' "${binfmt_file}")
+        [[ -n ${qemu_interpreter} && -x ${qemu_interpreter} ]] || {
+            echo "qemu-riscv64 binfmt interpreter is not executable" >&2
+            exit 1
+        }
+        execution_mode=qemu-user
+        ;;
+    *)
+        echo "unsupported build host architecture: ${host_arch}" >&2
+        exit 1
+        ;;
+esac
+
+CLOUDPODS_CORE_MAKE_JOBS=${CLOUDPODS_CORE_MAKE_JOBS:-4}
+CLOUDPODS_CORE_GO_PARALLELISM=${CLOUDPODS_CORE_GO_PARALLELISM:-8}
+CLOUDPODS_CORE_GOMAXPROCS=${CLOUDPODS_CORE_GOMAXPROCS:-1}
+for concurrency_var in \
+    CLOUDPODS_CORE_MAKE_JOBS \
+    CLOUDPODS_CORE_GO_PARALLELISM \
+    CLOUDPODS_CORE_GOMAXPROCS; do
+    concurrency_value=${!concurrency_var}
+    [[ ${concurrency_value} =~ ^[1-9][0-9]*$ ]]
+done
+echo "RISC-V execution mode: ${execution_mode} (host: ${host_arch})"
 : "${GITHUB_ACTOR:?GITHUB_ACTOR is required}"
 : "${GHCR_TOKEN:?GHCR_TOKEN is required}"
 : "${DASHBOARD_DIST_DIR:?DASHBOARD_DIST_DIR is required}"
@@ -43,6 +79,22 @@ install -d -m 0755 "${source_dir}" "${stage_dir}"
 printf '%s' "${GHCR_TOKEN}" | buildah login \
     --username "${GITHUB_ACTOR}" --password-stdin ghcr.io
 
+builder_image=${GHCR_NAMESPACE}/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1
+if [[ ${execution_mode} == qemu-user ]]; then
+    qemu_smoke_builder=cloudpods-qemu-user-smoke-${builder_suffix}
+    buildah pull --arch riscv64 "${builder_image}"
+    buildah from --name "${qemu_smoke_builder}" "${builder_image}" >/dev/null
+    active_builders+=("${qemu_smoke_builder}")
+    buildah run "${qemu_smoke_builder}" -- sh -ec '
+        test "$(uname -m)" = riscv64
+        printf "package main\nfunc main() {}\n" >/tmp/qemu-smoke.go
+        go build -o /tmp/qemu-smoke /tmp/qemu-smoke.go
+        file /tmp/qemu-smoke | grep -F "UCB RISC-V"
+        /tmp/qemu-smoke
+    '
+    buildah rm "${qemu_smoke_builder}" >/dev/null
+fi
+
 clone_exact() {
     local repository=$1
     local source_ref=$2
@@ -53,7 +105,9 @@ clone_exact() {
     local cache_dir=${CLOUDPODS_SOURCE_CACHE_DIR:-}
     local repository_path
     local source_archive
+    local source_asset
     local source_name
+    local source_page_url
 
     repository_path=${repository#https://github.com/}
     repository_path=${repository_path%.git}
@@ -61,17 +115,24 @@ clone_exact() {
     [[ -n ${source_ref} ]]
     [[ ${source_sha256} =~ ^[0-9a-f]{64}$ ]]
     source_name=$(basename "${repository_path}")
-    source_archive=${work_root}/${source_name}-${source_commit}.tar.gz
+    source_asset=${source_name}-${source_commit}.tar.gz
+    source_archive=${work_root}/${source_asset}
+    source_page_url=${SOURCE_ASSET_PAGE_BASE_URL}/${source_asset}
     cache_archive=${cache_dir:+${cache_dir}/${source_name}-${source_commit}.tar.gz}
     if [[ -n ${cache_archive} && -f ${cache_archive} ]] && \
         echo "${source_sha256}  ${cache_archive}" | sha256sum --check --status; then
         echo "Using verified source cache: ${cache_archive}"
         install -m 0644 "${cache_archive}" "${source_archive}"
     else
-        curl --fail --location --retry 10 --retry-all-errors \
-            --connect-timeout 20 --max-time 600 \
-            "https://codeload.github.com/${repository_path}/tar.gz/${source_commit}" \
-            --output "${source_archive}"
+        if ! curl --fail --location --retry 5 --retry-all-errors \
+            --continue-at - --connect-timeout 20 --max-time 1800 \
+            "${source_page_url}" --output "${source_archive}"; then
+            rm -f "${source_archive}"
+            curl --fail --location --retry 10 --retry-all-errors \
+                --connect-timeout 20 --max-time 600 \
+                "https://codeload.github.com/${repository_path}/tar.gz/${source_commit}" \
+                --output "${source_archive}"
+        fi
     fi
     echo "${source_sha256}  ${source_archive}" | sha256sum --check
     if [[ -n ${cache_archive} ]]; then
@@ -127,6 +188,10 @@ mirror_dependencies() {
     while IFS=$'\t' read -r source_image target_image; do
         [[ -n ${source_image} && -n ${target_image} ]]
         [[ ${source_image} != localhost/* ]] || continue
+        if riscv64_mirror_is_current "${source_image}" "${target_image}"; then
+            echo "Using verified existing dependency mirror: ${target_image}"
+            continue
+        fi
         buildah pull --arch riscv64 "${source_image}"
         [[ $(buildah inspect --format '{{.OCIv1.Architecture}}' "${source_image}") == riscv64 ]]
         buildah tag "${source_image}" "${target_image}"
@@ -151,10 +216,30 @@ mirror_dependencies
 
 extract_cloudpods_source_asset "${source_dir}/cloudpods"
 clone_exact \
-    https://github.com/yunionio/onecloud-operator.git \
+    https://github.com/yinjiayi/cloudpods-operator.git \
     "${ONECLOUD_OPERATOR_SOURCE_REF}" "${ONECLOUD_OPERATOR_SOURCE_COMMIT}" \
     "${ONECLOUD_OPERATOR_SOURCE_ARCHIVE_SHA256}" \
     "${source_dir}/onecloud-operator"
+clone_exact \
+    https://github.com/yunionio/kubecomps.git \
+    "${KUBECOMPS_SOURCE_REF}" "${KUBECOMPS_SOURCE_COMMIT}" \
+    "${KUBECOMPS_SOURCE_ARCHIVE_SHA256}" \
+    "${source_dir}/kubecomps"
+clone_exact \
+    https://github.com/zexi/kubespray.git \
+    "${KUBESPRAY_LEGACY_SOURCE_COMMIT}" "${KUBESPRAY_LEGACY_SOURCE_COMMIT}" \
+    "${KUBESPRAY_LEGACY_SOURCE_ARCHIVE_SHA256}" \
+    "${source_dir}/kubecomps/manifests/ansible/kubespray"
+clone_exact \
+    https://github.com/zexi/kubespray.git \
+    "${KUBESPRAY_2_17_SOURCE_COMMIT}" "${KUBESPRAY_2_17_SOURCE_COMMIT}" \
+    "${KUBESPRAY_2_17_SOURCE_ARCHIVE_SHA256}" \
+    "${source_dir}/kubecomps/manifests/ansible/kubespray_2_17_0"
+clone_exact \
+    https://github.com/zexi/kubespray.git \
+    "${KUBESPRAY_2_19_SOURCE_COMMIT}" "${KUBESPRAY_2_19_SOURCE_COMMIT}" \
+    "${KUBESPRAY_2_19_SOURCE_ARCHIVE_SHA256}" \
+    "${source_dir}/kubecomps/manifests/ansible/kubespray_2_19_1"
 clone_exact \
     https://github.com/yunionio/sdnagent.git \
     "${SDNAGENT_SOURCE_REF}" "${SDNAGENT_SOURCE_COMMIT}" \
@@ -168,8 +253,6 @@ apply_source_patch \
     "${source_dir}/onecloud-operator" \
     "${repo_root}/images/patches/onecloud-operator-disable-probe-kubelet.patch"
 
-builder_image=${GHCR_NAMESPACE}/cloudpods-alpine-build:3.22.2-go-1.24.9-0-riscv64.1
-
 new_builder cloudpods-operator-builder "${builder_image}"
 operator_builder=${BUILDER_NAME}
 buildah run \
@@ -179,13 +262,86 @@ buildah run \
     sh -ec 'cd /src; install -d _output/alpine-build/bin; make VERSION=v4.0.3 GOARCH=riscv64 BIN_DIR=/src/_output/alpine-build/bin onecloud-operator; test -x _output/alpine-build/bin/onecloud-controller-manager'
 remove_builder "${operator_builder}"
 
-new_builder cloudpods-core-builder "${builder_image}"
-cloudpods_builder=${BUILDER_NAME}
+helm_packager_image=${GHCR_NAMESPACE}/cloudpods-helm:v4.0.0-1-riscv64.1
+new_builder kubecomps-helm-packager "${helm_packager_image}"
+helm_packager=${BUILDER_NAME}
+buildah run \
+    --volume "${source_dir}/kubecomps:/src:rw" \
+    "${helm_packager}" -- \
+    /bin/bash -ec 'cd /src; ./scripts/embed-helm-pkgs.sh; test -f static/monitor-stack-8.12.13.tgz; test -f static/minio-8.0.6.tgz; test -f static/linux-server_rev1.json'
+remove_builder "${helm_packager}"
+
+kube_builder_image=localhost/cloudpods/cloudpods-kube-build:${CLOUDPODS_KUBE_BUILD_IMAGE_VERSION}
+buildah bud --arch riscv64 --layers --network host \
+    --build-arg "BASE_IMAGE=${GHCR_NAMESPACE}/cloudpods-kube-build:3.22.2-go-1.24.9-0-riscv64.1" \
+    --build-arg "LLD_VERSION=${CLOUDPODS_KUBE_BUILD_LLD_VERSION}" \
+    --tag "${kube_builder_image}" \
+    --file "${repo_root}/images/Containerfile.kube-build-lld" \
+    "${repo_root}/images"
+
+new_builder kubeserver-linker-verifier "${kube_builder_image}"
+kubeserver_linker_verifier=${BUILDER_NAME}
+buildah run "${kubeserver_linker_verifier}" -- sh -ec '
+    ld.lld --version | grep -F "LLD 20.1.8"
+    printf "int main(void) { return 0; }\n" >/tmp/lld-smoke.c
+    gcc -fuse-ld=lld /tmp/lld-smoke.c -o /tmp/lld-smoke
+    /tmp/lld-smoke
+'
+remove_builder "${kubeserver_linker_verifier}"
+
+new_builder kubeserver-builder "${kube_builder_image}"
+kubeserver_builder=${BUILDER_NAME}
 buildah run \
     --env GOPROXY=https://goproxy.cn,direct \
+    --volume "${source_dir}/kubecomps:/src:rw" \
+    "${kubeserver_builder}" -- \
+    sh -ec "cd /src; go generate -mod vendor ./pkg/kubeserver/embed; install -d _output/alpine-build/bin; CC='gcc -fuse-ld=lld' make GOARCH=riscv64 BIN_DIR=/src/_output/alpine-build/bin GIT_BRANCH=${KUBECOMPS_SOURCE_REF} GIT_COMMIT=${KUBECOMPS_SOURCE_COMMIT} GIT_VERSION=v4.0.3 GIT_TREE_STATE=clean BUILD_DATE=${KUBECOMPS_SOURCE_DATE} cmd/kubeserver; test -x _output/alpine-build/bin/kubeserver"
+remove_builder "${kubeserver_builder}"
+
+new_builder cloudpods-core-builder "${builder_image}"
+cloudpods_builder=${BUILDER_NAME}
+cloudpods_binaries=(
+    ansibleserver
+    apigateway
+    baremetal-agent
+    climc
+    cloudevent
+    cloudid
+    cloudmon
+    cloudnet
+    cloudproxy
+    devtool
+    esxi-agent
+    executor-server
+    glance
+    host
+    host-deployer
+    keystone
+    lbagent
+    llm
+    logger
+    mcp-server
+    monitor
+    notify
+    region
+    region-dns
+    scheduledtask
+    scheduler
+    torrent
+    vpcagent
+    webconsole
+    yunionconf
+)
+cloudpods_binary_list=${cloudpods_binaries[*]}
+buildah run \
+    --env GOPROXY=https://goproxy.cn,direct \
+    --env "GOFLAGS=-p=${CLOUDPODS_CORE_GO_PARALLELISM}" \
+    --env "GOMAXPROCS=${CLOUDPODS_CORE_GOMAXPROCS}" \
+    --env "CLOUDPODS_CORE_MAKE_JOBS=${CLOUDPODS_CORE_MAKE_JOBS}" \
+    --env "CLOUDPODS_BINARIES=${cloudpods_binary_list}" \
     --volume "${source_dir}/cloudpods:/src:rw" \
     "${cloudpods_builder}" -- \
-    sh -ec "cd /src; install -d _output/alpine-build/bin; make -j\$(nproc) ONECLOUD_CI_BUILD=1 GIT_VERSION=v4.0.3 GIT_COMMIT=${CLOUDPODS_SOURCE_COMMIT} GIT_BRANCH=${CLOUDPODS_SOURCE_REF} GIT_TREE_STATE=dirty BIN_DIR=/src/_output/alpine-build/bin cmd/keystone cmd/logger cmd/region cmd/scheduler cmd/glance cmd/torrent cmd/webconsole cmd/apigateway cmd/yunionconf cmd/host cmd/host-deployer cmd/climc cmd/executor-server cmd/monitor cmd/notify; test -x _output/alpine-build/bin/host; test -x _output/alpine-build/bin/region; test -x _output/alpine-build/bin/executor-server"
+    sh -ec "cd /src; install -d _output/alpine-build/bin; targets=; for binary in \${CLOUDPODS_BINARIES}; do targets=\"\${targets} cmd/\${binary}\"; done; make -j\"\${CLOUDPODS_CORE_MAKE_JOBS}\" ONECLOUD_CI_BUILD=1 GIT_VERSION=v4.0.3 GIT_COMMIT=${CLOUDPODS_SOURCE_COMMIT} GIT_BRANCH=${CLOUDPODS_SOURCE_REF} GIT_TREE_STATE=dirty BIN_DIR=/src/_output/alpine-build/bin \${targets}; for binary in \${CLOUDPODS_BINARIES}; do test -x \"_output/alpine-build/bin/\${binary}\"; done"
 remove_builder "${cloudpods_builder}"
 
 new_builder cloudpods-sdn-builder "${builder_image}"
@@ -209,11 +365,15 @@ chmod 0755 "${work_root}/k3s-riscv64"
 cloudpods_stage=${stage_dir}/cloudpods
 operator_stage=${stage_dir}/operator
 web_stage=${stage_dir}/web
+kubeserver_stage=${stage_dir}/kubeserver
 install -d -m 0755 \
     "${cloudpods_stage}/rootfs/opt/yunion/bin" \
     "${cloudpods_stage}/rootfs/usr/bin" \
     "${operator_stage}/rootfs/bin" \
-    "${web_stage}/dist"
+    "${web_stage}/dist" \
+    "${kubeserver_stage}/rootfs/opt/yunion/ansible" \
+    "${kubeserver_stage}/rootfs/opt/yunion/bin" \
+    "${kubeserver_stage}/rootfs/usr/bin"
 
 cp "${source_dir}/cloudpods/_output/alpine-build/bin/"* \
     "${cloudpods_stage}/rootfs/opt/yunion/bin/"
@@ -223,9 +383,18 @@ install -m 0755 \
     "${cloudpods_stage}/rootfs/opt/yunion/bin/"
 install -m 0755 "${work_root}/k3s-riscv64" \
     "${cloudpods_stage}/rootfs/usr/bin/kubectl"
+install -m 0755 "${work_root}/k3s-riscv64" \
+    "${kubeserver_stage}/rootfs/usr/bin/kubectl"
+install -m 0755 \
+    "${source_dir}/kubecomps/_output/alpine-build/bin/kubeserver" \
+    "${kubeserver_stage}/rootfs/opt/yunion/bin/kubeserver"
+cp -a "${source_dir}/kubecomps/manifests/ansible/." \
+    "${kubeserver_stage}/rootfs/opt/yunion/ansible/"
 cp -a "${source_dir}/cloudpods/build/region/root/opt/." \
     "${cloudpods_stage}/rootfs/opt/"
 cp -a "${source_dir}/cloudpods/build/climc/root/opt/." \
+    "${cloudpods_stage}/rootfs/opt/"
+cp -a "${source_dir}/cloudpods/build/cloudid/root/opt/." \
     "${cloudpods_stage}/rootfs/opt/"
 cp -a "${source_dir}/cloudpods/build/monitor/root/opt/." \
     "${cloudpods_stage}/rootfs/opt/"
@@ -241,8 +410,9 @@ cloudpods_image=localhost/cloudpods/cloudpods:${CLOUDPODS_IMAGE_VERSION}
 operator_image=localhost/cloudpods/onecloud-operator:${ONECLOUD_OPERATOR_IMAGE_VERSION}
 web_image=localhost/cloudpods/web:${CLOUDPODS_WEB_IMAGE_VERSION}
 etcd_image=localhost/cloudpods/etcd:3.5.24
+kubeserver_image=localhost/cloudpods/kubeserver:${KUBESERVER_IMAGE_VERSION}
 
-buildah bud --arch riscv64 --layers \
+buildah bud --arch riscv64 --layers --network host \
     --build-arg "SOURCE_COMMIT=${CLOUDPODS_SOURCE_COMMIT}" \
     --build-arg "VERSION=${CLOUDPODS_IMAGE_VERSION}" \
     --tag "${cloudpods_image}" \
@@ -260,24 +430,52 @@ buildah bud --arch riscv64 --layers \
     --tag "${web_image}" \
     --file "${repo_root}/images/Containerfile.web" \
     "${web_stage}"
+buildah bud --arch riscv64 --layers --network host \
+    --build-arg "BASE_IMAGE=${GHCR_NAMESPACE}/cloudpods-onecloud-base:v3.22.2-0-riscv64.1" \
+    --build-arg "SOURCE_COMMIT=${KUBECOMPS_SOURCE_COMMIT}" \
+    --build-arg "VERSION=${KUBESERVER_IMAGE_VERSION}" \
+    --tag "${kubeserver_image}" \
+    --file "${repo_root}/images/Containerfile.kubeserver" \
+    "${kubeserver_stage}"
 buildah tag "${cloudpods_image}" "${etcd_image}"
 
-for image in "${cloudpods_image}" "${operator_image}" "${web_image}" "${etcd_image}"; do
+for image in "${cloudpods_image}" "${operator_image}" "${web_image}" \
+    "${etcd_image}" "${kubeserver_image}"; do
     [[ $(buildah inspect --format '{{.OCIv1.Architecture}}' "${image}") == riscv64 ]]
 done
 
 new_builder cloudpods-image-verifier "${cloudpods_image}"
 verify_builder=${BUILDER_NAME}
-buildah run "${verify_builder}" -- sh -ec '
+buildah run --env "CLOUDPODS_BINARIES=${cloudpods_binary_list}" \
+    "${verify_builder}" -- sh -ec '
     test "$(uname -m)" = riscv64
     test "$(etcd --version | awk "/etcd Version/{print \$3}")" = 3.5.24
     for binary in qemu-system-riscv64 qemu-img ovs-vsctl etcd etcdctl kubectl; do command -v "${binary}"; done
-    for binary in keystone region scheduler glance torrent webconsole apigateway yunionconf host host-deployer climc executor-server monitor notify sdnagent sdncli; do test -x "/opt/yunion/bin/${binary}"; done
+    for binary in ${CLOUDPODS_BINARIES} sdnagent sdncli; do test -x "/opt/yunion/bin/${binary}"; done
     test -d /opt/yunion/share/template/title@cn
     test -d /opt/yunion/share/local-templates/content@cn
+    test "$(find /opt/yunion/share/saml/sp-metadata -maxdepth 1 -type f -name "*.xml" | wc -l)" -eq 9
+    test -f /opt/yunion/share/saml/sp-metadata/gcp.xml
     kubectl version --client=true
 '
 remove_builder "${verify_builder}"
+
+new_builder kubeserver-image-verifier "${kubeserver_image}"
+kubeserver_verifier=${BUILDER_NAME}
+buildah run "${kubeserver_verifier}" -- sh -ec '
+    test "$(uname -m)" = riscv64
+    test -x /opt/yunion/bin/kubeserver
+    test -L /opt/yunion/bin/kube-server
+    test -f /opt/yunion/ansible/ansible.cfg
+    command -v ansible-playbook
+    command -v kubectl
+    ansible-playbook --version
+    kubectl version --client=true
+    version_output=$(/opt/yunion/bin/kubeserver --version 2>&1)
+    printf "%s\n" "${version_output}" | grep -F gitVersion | grep -F v4.0.3
+    printf "%s\n" "${version_output}" | grep -F platform | grep -F linux/riscv64
+'
+remove_builder "${kubeserver_verifier}"
 
 new_builder cloudpods-operator-verifier "${operator_image}"
 operator_verifier=${BUILDER_NAME}

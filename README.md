@@ -15,27 +15,52 @@ release assets, the GHCR image names, and the RPM repository from the
 of this delivery.
 
 Customer deployment steps are in the
-[openEuler RISC-V single-node guide](https://github.com/yinjiayi/ocboot/blob/v4.0.3-riscv64.5/docs/customer-deployment-openeuler-riscv64.md).
+[openEuler RISC-V deployment guide](https://github.com/yinjiayi/ocboot/blob/v4.0.3-riscv64.16/docs/customer-deployment-openeuler-riscv64.md).
 
 ## Release layout
 
 | Deliverable | Location |
 | --- | --- |
-| K3s binary and air-gap bundle | `yinjiayi.github.io/cloudpods-riscv64-releases/k3s/v1.28.5-k3s1-riscv64.3/` |
+| K3s binary and air-gap bundle | `yinjiayi.github.io/cloudpods-riscv64-releases/k3s/v1.28.5-k3s1-riscv64.4/` |
 | Pinned native-build source archives | `yinjiayi.github.io/cloudpods-riscv64-releases/source-assets/` |
 | K3s system images | `ghcr.io/yinjiayi/k3s-*` |
 | Cloudpods runtime images | `ghcr.io/yinjiayi/*` |
 | ocboot build image | `ghcr.io/yinjiayi/ocboot` |
 | openEuler RISC-V RPMs | `yinjiayi.github.io/cloudpods-riscv64-releases/rpm/openEuler/24.03-LTS-SP3/riscv64/` |
 
-The complete version and provenance lock is in `versions.env`. Build commands
-run natively on a self-hosted RISC-V machine labelled
-`openeuler-24.03-riscv64`, except for the cross-compiled K3s binary in the K3s
-fork.
+The complete version and provenance lock is in `versions.env`. Cloudpods OCI
+images are built in pinned `riscv64` containers on an x86_64 self-hosted runner
+labelled `cloudpods-riscv64-qemu`; Linux binfmt dispatches their processes to
+QEMU user-mode. The K3s binary is cross-compiled in the K3s fork. RPM builds
+and KVM acceptance remain on the openEuler RISC-V host labelled
+`openeuler-24.03-riscv64`.
 
-## Required runner
+The dashboard distribution and K3s binary enter the native Cloudpods build
+through a checksum-pinned RISC-V build-assets image. Its immutable manifest
+digest is recorded in `versions.env`, so rebuilding release scripts does not
+rebuild or redownload unchanged web/K3s inputs on the native runner.
 
-The native runner must provide:
+## Required runners
+
+The Cloudpods image runner must provide:
+
+- x86_64 Linux with the `cloudpods-riscv64-qemu` Actions label
+- an enabled `qemu-riscv64` binfmt handler with persistent-open flags
+- Buildah, Skopeo, Git, Curl, jq, `file`, `createrepo_c`, and SHA-256 tools
+- at least 32 GiB RAM and 120 GiB free disk
+
+The workflow requires `QEMU_USER_RISCV64=1`, verifies the registered
+interpreter, compiles and runs a RISC-V Go ELF before the full build, and then
+checks every published image manifest and runtime binary as `riscv64`.
+Existing dependency mirrors are reused only when the normalized RISC-V OCI
+config SHA-256 matches the pinned source; that config includes the rootfs
+DiffIDs, architecture, history, and runtime settings.
+The core build uses four outer Make jobs, eight Go package jobs per target, and
+one compiler thread per emulated process. This keeps at most 32 RISC-V package
+compilers active on the 32-vCPU x86 runner instead of multiplying both layers
+of parallelism.
+
+The native RPM and KVM-validation runner must provide:
 
 - openEuler 24.03 LTS SP3 on `riscv64`
 - Buildah, CNI plugins, Skopeo, Git, RPM build tools, createrepo_c, GPG, GCC
@@ -84,6 +109,18 @@ The target openEuler 24.03 LTS SP3 RISC-V repositories do not publish the
 `librbd1` and `librados2` runtime packages, so this QEMU build explicitly
 disables optional Ceph RBD support and rejects an RPM that regains either
 unresolvable library dependency. Local host storage remains supported.
+The QEMU RPM also carries its exact glibc loader and runtime-library closure:
+Cloudpods mounts `/usr/local/qemu-10.0.7` into an Alpine host pod, where a
+host-linked openEuler ELF cannot otherwise start. Physical acceptance checks
+the wrapper, `qemu-img`, the Cloudpods `-machine none` QMP query, and a real
+`/dev/kvm` process before the RPM is eligible for Pages.
+
+KubeServer itself keeps its required Ceph CGO support. Its native RISC-V link
+uses the pinned Alpine `lld20` package from the published
+`cloudpods-kube-build` derivative because GNU ld 2.44 crashes while processing
+the generated RISC-V relocation stream. The workflow compiles and runs a small
+LLD-linked RISC-V ELF before it builds KubeServer, then runs the finished
+KubeServer binary again from the final runtime image.
 
 The workflows use the repository-scoped `GITHUB_TOKEN`; no personal access
 token is stored in repository secrets.
@@ -101,14 +138,15 @@ sudo ctr -n k8s.io images import cloudpods-web-v4.0.3-riscv64-ui2.oci.tar
 ```
 
 The downloader uses anonymous GHCR pull tokens and verifies the manifest and
-every blob against its SHA-256 digest. It accepts a single-platform OCI image
-manifest; use the architecture-specific tags recorded in the image lock files.
+every blob against its SHA-256 digest. It accepts a single-platform OCI or
+Docker v2 image manifest; use the architecture-specific tags recorded in the
+image lock files.
 
 ## Release order
 
 1. Run `Publish Actions Runner RISC-V compatibility asset` once for the pinned
    Runner version, then install and register the RISC-V build runner.
-2. Export the pinned Cloudpods and ocboot commits, verify
+2. Export every pinned native-build source commit, verify
    `source-assets/SHA256SUMS`, and publish them under the source-asset release
    tag recorded in `versions.env`; then run `Publish native-build source assets
    to Pages` so the RISC-V runner uses the resumable Pages mirror. When a
@@ -118,9 +156,24 @@ manifest; use the architecture-specific tags recorded in the image lock files.
 4. Confirm each new package is Public in GitHub package settings; change it if
    the package did not inherit visibility from the public source repository.
 5. Run `scripts/verify-ghcr-public.sh images/k3s-images.lock` without credentials.
-6. Tag the K3s fork with `v1.28.5+k3s1-riscv64.3`.
-7. Run `Build and publish Cloudpods RISC-V images`, make any new packages
-   public, and verify `images/cloudpods-images.lock` the same way.
+6. Tag the K3s fork with `v1.28.5+k3s1-riscv64.4`.
+7. Run `Build and publish Cloudpods RISC-V images` on the labelled x86_64 QEMU
+   user-mode runner, make any new packages public, and verify
+   `images/cloudpods-images.lock` the same way.
+   For a host-deployer-only correction, use `Build Cloudpods RISC-V
+   host-deployer hotfix`; it compiles the pinned `riscv64` binary, overlays it
+   on the exact previous Cloudpods image, validates the new guest signature,
+   and publishes a new immutable version without rebuilding unrelated binaries.
+   If the build has already produced all final local images but a post-build
+   assertion or registry push fails, fix the assertion and push a
+   `cloudpods-images-resume-riscv64-*` tag. The recovery workflow checks the
+   exact source revision, version, architecture, binaries, and runtime content
+   of every cached image before publishing; it never accepts or publishes an
+   unverified partial build.
+   The same workflow can assemble the pinned resource-only `.5` layer from the
+   verified `.4` cache, restores CloudID's nine SAML metadata files from the
+   exact Cloudpods source commit, and emits matching KubeServer version
+   metadata without recompiling unchanged binaries.
 8. Run `Build openEuler RISC-V RPMs` and note its workflow run ID.
 9. Download that run's RPM artifact to the physical RISC-V host and run
    `sudo rpm/verify-qemu-kvm-rpm.sh PATH_TO_QEMU_RPM`.
@@ -130,13 +183,20 @@ manifest; use the architecture-specific tags recorded in the image lock files.
    exact artifact, adds the pinned source archives, and deploys the complete
    Pages site atomically; it does not rebuild it. Manual dispatch remains
    available.
+   For a wrapper/runtime-only QEMU correction, run
+   `rpm/repackage-qemu-runtime-rpm.sh` on the physical host, validate the
+   result with `rpm/verify-qemu-kvm-rpm.sh`, publish both RPMs as the release
+   named by `rpm/qemu-runtime-hotfix.env`, and record their hashes. The Pages
+   workflow overlays only those two pinned packages on the previously
+   validated repository and regenerates its metadata and checksums.
 
 The Pages workflows also mirror the four checksum-verified RISC-V K3s release
 assets. The `yinjiayi/k3s` GitHub Release remains the provenance source, while
 ocboot uses the Pages mirror so installation does not depend on the separate
 GitHub release-asset CDN path.
 11. Tag the ocboot RISC-V branch, run `Build and publish ocboot RISC-V image`
-    from this release repository, then verify its GHCR package is public.
+    on the labelled x86_64 QEMU user-mode runner, then verify its GHCR package
+    is public.
 
 Packages linked to this public source repository currently inherit Public
 visibility. Always confirm the package settings and run the anonymous
@@ -156,4 +216,4 @@ git diff --check
 ```
 
 GitHub Actions workflow files must also parse as YAML. Full image and RPM
-builds are acceptance tests and run only on the labelled RISC-V runner.
+builds are acceptance tests and run on their respective labelled runners.

@@ -77,6 +77,40 @@ qemu_img=${package_root}${prefix}/bin/qemu-img
 "${real_qemu}" -machine help | grep -Eq '^virt[[:space:]]'
 "${real_qemu}" -accel help | grep -Fxq kvm
 
+# The Cloudpods host process runs in an Alpine container while the selected
+# QEMU binary is mounted from the openEuler host.  Bundle the exact glibc
+# loader and shared-library closure so that the host-mounted binary does not
+# depend on the container's libc implementation.
+runtime_dir=${package_root}${prefix}/lib
+install -d -m 0755 "${runtime_dir}"
+mapfile -t runtime_libraries < <(
+    {
+        ldd "${real_qemu}"
+        ldd "${qemu_img}"
+    } | awk '
+        /=> \/[^ ]+/ { print $3 }
+        /^[[:space:]]*\/[^ ]+[[:space:]]+\(0x/ { print $1 }
+    ' | sort -u
+)
+(( ${#runtime_libraries[@]} > 10 ))
+for runtime_library in "${runtime_libraries[@]}"; do
+    [[ -f ${runtime_library} ]]
+    cp -L --preserve=mode,timestamps \
+        "${runtime_library}" "${runtime_dir}/$(basename "${runtime_library}")"
+done
+for optional_runtime_library in /usr/lib64/libnss_*.so.2; do
+    [[ -f ${optional_runtime_library} ]] || continue
+    cp -L --preserve=mode,timestamps \
+        "${optional_runtime_library}" \
+        "${runtime_dir}/$(basename "${optional_runtime_library}")"
+done
+bundled_loader=${runtime_dir}/ld-linux-riscv64-lp64d.so.1
+[[ -x ${bundled_loader} ]]
+"${bundled_loader}" --library-path "${runtime_dir}" \
+    "${real_qemu}" --version | grep -F "version ${QEMU_VERSION}"
+"${bundled_loader}" --library-path "${runtime_dir}" \
+    "${qemu_img}" --version | grep -F "qemu-img version ${QEMU_VERSION}"
+
 case ${QEMU_KVM_SMOKE:-require} in
     require)
         [[ -c /dev/kvm ]] || {
@@ -110,6 +144,7 @@ install -d -m 0755 \
     "${output_dir}"
 install -m 0644 "${work_root}/${package_archive}" "${rpmbuild_root}/SOURCES/"
 install -m 0755 "${repo_root}/rpm/SOURCES/qemu-system-riscv64-cloudpods" "${rpmbuild_root}/SOURCES/"
+install -m 0755 "${repo_root}/rpm/SOURCES/qemu-img-cloudpods" "${rpmbuild_root}/SOURCES/"
 install -m 0644 "${repo_root}/rpm/SPECS/qemu-riscv-cloudpods.spec" "${rpmbuild_root}/SPECS/"
 rpmbuild --define "_topdir ${rpmbuild_root}" -ba \
     "${rpmbuild_root}/SPECS/qemu-riscv-cloudpods.spec"

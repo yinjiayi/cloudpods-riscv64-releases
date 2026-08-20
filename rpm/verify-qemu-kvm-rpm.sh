@@ -32,10 +32,24 @@ fi
 rpm -V "${rpm_name}"
 
 qemu_bin=/usr/local/qemu-10.0.7/bin/qemu-system-riscv64
+qemu_img=/usr/local/qemu-10.0.7/bin/qemu-img
+bundled_loader=/usr/local/qemu-10.0.7/lib/ld-linux-riscv64-lp64d.so.1
 [[ -x ${qemu_bin} ]]
+[[ -x ${qemu_img} && -x ${bundled_loader} ]]
+[[ $(head -n 1 "${qemu_bin}") == '#!/bin/bash' ]]
 "${qemu_bin}" --version | grep -F 'version 10.0.7'
+"${qemu_img}" --version | grep -F 'qemu-img version 10.0.7'
 "${qemu_bin}" -machine help | grep -Eq '^virt[[:space:]]'
 "${qemu_bin}" -accel help | grep -Fxq kvm
+qmp_output=$(
+    printf '%s\n' \
+        '{"execute":"qmp_capabilities"}' \
+        '{"execute":"query-machines","id":"query_machines"}' \
+        '{"execute":"quit"}' |
+        "${qemu_bin}" -qmp stdio -vnc none -machine none -display none
+)
+grep -Fq '"QMP"' <<<"${qmp_output}"
+grep -Fq '"id": "query_machines"' <<<"${qmp_output}"
 
 smoke_dir=$(mktemp -d /tmp/cloudpods-qemu-kvm.XXXXXX)
 smoke_pid=

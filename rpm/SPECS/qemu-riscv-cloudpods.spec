@@ -3,12 +3,13 @@
 
 Name:           qemu-riscv-cloudpods
 Version:        10.0.7
-Release:        4.oe2403sp3
+Release:        6.oe2403sp3
 Summary:        QEMU RISC-V system emulator for Cloudpods on openEuler
 License:        GPL-2.0-or-later
 URL:            https://www.qemu.org/
 Source0:        qemu-10.0.7-openEuler24.03-riscv64.tar.xz
 Source1:        qemu-system-riscv64-cloudpods
+Source2:        qemu-img-cloudpods
 BuildArch:      riscv64
 
 Provides:       bundled(qemu) = %{version}
@@ -31,15 +32,29 @@ test -x %{buildroot}/usr/local/qemu-10.0.7/bin/qemu-system-riscv64
 mv \
     %{buildroot}/usr/local/qemu-10.0.7/bin/qemu-system-riscv64 \
     %{buildroot}/usr/local/qemu-10.0.7/bin/qemu-system-riscv64.real
+mv \
+    %{buildroot}/usr/local/qemu-10.0.7/bin/qemu-img \
+    %{buildroot}/usr/local/qemu-10.0.7/bin/qemu-img.real
 install -m 0755 \
     %{SOURCE1} \
     %{buildroot}/usr/local/qemu-10.0.7/bin/qemu-system-riscv64
+install -m 0755 \
+    %{SOURCE2} \
+    %{buildroot}/usr/local/qemu-10.0.7/bin/qemu-img
 
 %files
 %defattr(-,root,root,-)
 /usr/local/qemu-10.0.7
 
 %changelog
+* Tue Aug 18 2026 Cloudpods RISC-V deployment <root@localhost> - 10.0.7-6.oe2403sp3
+- Keep the Cloudpods -machine none QMP probe free of guest-only ACPI options.
+
+* Tue Aug 18 2026 Cloudpods RISC-V deployment <root@localhost> - 10.0.7-5.oe2403sp3
+- Use the Alpine-compatible /bin/bash wrapper path used by the host pod.
+- Bundle the glibc loader and QEMU runtime libraries for host-pod execution.
+- Wrap qemu-img with the same self-contained runtime.
+
 * Mon Aug 17 2026 Cloudpods RISC-V deployment <root@localhost> - 10.0.7-4.oe2403sp3
 - Disable optional RBD support because the target openEuler RISC-V repositories
   do not publish the required librbd1 and librados2 runtime packages.

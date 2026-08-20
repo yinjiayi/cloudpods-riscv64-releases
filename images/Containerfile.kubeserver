@@ -1,0 +1,34 @@
+ARG BASE_IMAGE=registry.cn-beijing.aliyuncs.com/yunionio/onecloud-base:v3.22.2-0
+FROM ${BASE_IMAGE}
+
+ARG SOURCE_COMMIT
+ARG VERSION
+ARG ALPINE_MIRROR=https://mirrors.aliyun.com/alpine
+ARG ALPINE_BRANCH=v3.22
+
+RUN printf '%s/%s/main\n%s/%s/community\n' \
+        "${ALPINE_MIRROR}" "${ALPINE_BRANCH}" \
+        "${ALPINE_MIRROR}" "${ALPINE_BRANCH}" >/etc/apk/repositories \
+    && apk add --no-cache \
+        ansible=11.6.0-r0 \
+        ansible-core=2.18.6-r0 \
+        aws-cli=2.27.25-r0 \
+        ca-certificates=20260611-r0 \
+        git=2.49.1-r0 \
+        librados19=19.2.3-r0 \
+        librbd19=19.2.3-r0 \
+        openssh-client-default=10.0_p1-r10 \
+        py3-netaddr=0.10.1-r1 \
+        py3-pip=25.1.1-r0 \
+        rsync=3.4.3-r0 \
+        skopeo=1.20.0-r4 \
+        tzdata=2026c-r0 \
+    && rm -rf /var/cache/apk/*
+
+COPY rootfs /
+
+RUN ln -s /opt/yunion/bin/kubeserver /opt/yunion/bin/kube-server
+
+LABEL org.opencontainers.image.source="https://github.com/yunionio/kubecomps" \
+      org.opencontainers.image.revision="${SOURCE_COMMIT}" \
+      org.opencontainers.image.version="${VERSION}"

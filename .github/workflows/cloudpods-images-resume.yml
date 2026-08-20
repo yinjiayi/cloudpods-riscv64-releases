@@ -1,0 +1,91 @@
+name: Verify and publish cached Cloudpods RISC-V images
+
+on:
+  push:
+    tags:
+      - 'cloudpods-images-resume-riscv64-*'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: cloudpods-images-riscv64-publication
+  cancel-in-progress: false
+
+jobs:
+  publish-cached:
+    runs-on: [self-hosted, Linux, X64, cloudpods-riscv64-qemu]
+    timeout-minutes: 120
+    steps:
+      - name: Fetch pinned workflow source with native curl
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          source_root=${RUNNER_TEMP}/cloudpods-riscv64-releases-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+          source_archive=${source_root}.tar.gz
+          install -d -m 0755 "${source_root}"
+          curl --fail --location --retry 10 --retry-all-errors \
+            --connect-timeout 20 --max-time 600 \
+            --output "${source_archive}" \
+            "https://codeload.github.com/${GITHUB_REPOSITORY}/tar.gz/${GITHUB_SHA}"
+          tar -C "${source_root}" --strip-components=1 -xzf "${source_archive}"
+          test -x "${source_root}/images/verify-cloudpods-images.sh"
+          test -x "${source_root}/images/publish-cloudpods-images.sh"
+          echo "RELEASE_SOURCE_ROOT=${source_root}" >> "${GITHUB_ENV}"
+          echo "RELEASE_SOURCE_ARCHIVE=${source_archive}" >> "${GITHUB_ENV}"
+
+      - name: Assemble the resource-complete Cloudpods image
+        env:
+          QEMU_USER_RISCV64: '1'
+        run: "${RELEASE_SOURCE_ROOT}/images/build-cloudpods-resource-hotfix.sh"
+
+      - name: Verify exact cached images and RISC-V runtime contents
+        env:
+          QEMU_USER_RISCV64: '1'
+        run: "${RELEASE_SOURCE_ROOT}/images/verify-cloudpods-images.sh"
+
+      - name: Publish verified cached images
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          QEMU_USER_RISCV64: '1'
+        run: "${RELEASE_SOURCE_ROOT}/images/publish-cloudpods-images.sh"
+
+      - name: Remove temporary workflow source
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n ${RELEASE_SOURCE_ROOT:-} ]]; then
+            rm -rf -- "${RELEASE_SOURCE_ROOT}"
+          fi
+          if [[ -n ${RELEASE_SOURCE_ARCHIVE:-} ]]; then
+            rm -f -- "${RELEASE_SOURCE_ARCHIVE}"
+          fi
+
+  verify-public:
+    needs: publish-cached
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install registry inspection tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq skopeo
+
+      - name: Verify anonymous RISC-V pulls and write digest lock
+        run: |
+          scripts/write-image-digests.sh \
+            images/cloudpods-images.lock \
+            dist/cloudpods-images-riscv64.digests \
+            riscv64
+
+      - name: Upload digest lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudpods-images-riscv64-digests
+          if-no-files-found: error
+          path: |
+            dist/cloudpods-images-riscv64.digests
+            dist/cloudpods-images-riscv64.digests.sha256
