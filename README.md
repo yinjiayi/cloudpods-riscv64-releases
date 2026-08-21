@@ -1,7 +1,8 @@
 # Cloudpods RISC-V release sources
 
 Reproducible release source for running Cloudpods `v4.0.3` on openEuler
-24.03 LTS SP3 `riscv64` with a self-built K3s distribution.
+24.03 LTS SP3 `riscv64`. The repository provides both the ocboot/self-built
+K3s delivery and an independently validated native Kubernetes delivery.
 
 This repository publishes two classes of deliverables:
 
@@ -11,11 +12,15 @@ This repository publishes two classes of deliverables:
 
 K3s itself is built from the `yinjiayi/k3s` fork. ocboot consumes the K3s
 release assets, the GHCR image names, and the RPM repository from the
-`yinjiayi/ocboot` RISC-V branch. Native Kubernetes is intentionally not part
-of this delivery.
+`yinjiayi/ocboot` RISC-V branch. The native Kubernetes path installs the
+openEuler 1.29.1 packages first and then deploys Cloudpods with the same
+published images and RPM repository.
 
-Customer deployment steps are in the
-[openEuler RISC-V deployment guide](https://github.com/yinjiayi/ocboot/blob/v4.0.3-riscv64.16/docs/customer-deployment-openeuler-riscv64.md).
+Customer deployment steps:
+
+- [ocboot + self-built K3s guide](docs/customer-deployment-openeuler-riscv64.md)
+- [native Kubernetes guide](docs/customer-deployment-native-k8s-openeuler-riscv64.md)
+- [QEMU RVA23 validation record](docs/native-k8s-rva23-validation.md)
 
 ## Release layout
 
@@ -27,6 +32,7 @@ Customer deployment steps are in the
 | Cloudpods runtime images | `ghcr.io/yinjiayi/*` |
 | ocboot build image | `ghcr.io/yinjiayi/ocboot` |
 | openEuler RISC-V RPMs | `yinjiayi.github.io/cloudpods-riscv64-releases/rpm/openEuler/24.03-LTS-SP3/riscv64/` |
+| Native Kubernetes deployment scripts | `native-k8s/` |
 
 The complete version and provenance lock is in `versions.env`. Cloudpods OCI
 images are built in pinned `riscv64` containers on an x86_64 self-hosted runner
@@ -211,7 +217,8 @@ publishing.
 Before committing release-source changes, run:
 
 ```bash
-bash -n images/*.sh rpm/*.sh scripts/*.sh
+bash -n images/*.sh rpm/*.sh scripts/*.sh \
+  native-k8s/*.sh native-k8s/qemu-rva23-lab/*.sh
 git diff --check
 ```
 
