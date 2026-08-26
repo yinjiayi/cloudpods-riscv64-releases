@@ -13,9 +13,10 @@ This repository publishes two classes of deliverables:
 
 K3s itself is built from the `yinjiayi/k3s` fork. ocboot consumes the K3s
 release assets, the GHCR image names, and the RPM repository from the
-`yinjiayi/ocboot` RISC-V branch. The native Kubernetes path installs the
-openEuler 1.29.1 packages first and then deploys Cloudpods with the same
-published images and RPM repository.
+`yinjiayi/ocboot` RISC-V branch. The openEuler native path installs Kubernetes
+1.29.1 packages first. The openRuyi native path installs the pinned upstream
+Kubernetes 1.36.4 RISC-V binaries first. Both paths deploy Cloudpods only after
+the Kubernetes acceptance gate has passed.
 
 Customer deployment steps:
 
@@ -23,6 +24,8 @@ Customer deployment steps:
 - [native Kubernetes guide](docs/customer-deployment-native-k8s-openeuler-riscv64.md)
 - [openRuyi native Kubernetes guide](docs/customer-deployment-native-k8s-openruyi-riscv64.md)
 - [QEMU RVA23 validation record](docs/native-k8s-rva23-validation.md)
+- [openRuyi native Kubernetes validation record](docs/validation-openruyi-native-k8s-20260826.md)
+- [openRuyi upstream adaptation changes](docs/openruyi-upstream-changes.md)
 
 ## Release layout
 
@@ -75,6 +78,12 @@ The native RPM and KVM-validation runner must provide:
 - Buildah, CNI plugins, Skopeo, Git, RPM build tools, createrepo_c, GPG, GCC
   and Ninja
 - at least 16 GiB RAM and 60 GiB free disk
+
+The openRuyi QEMU publisher is a native `riscv64` openRuyi Creek 2026.07
+machine with `/dev/kvm`. It builds QEMU 11.1.0 from the checksum-pinned upstream source,
+enables KVM, slirp and Nettle, and rejects the bundle unless a
+password-protected VNC endpoint remains alive. This validates the DES-RFB
+crypto backend required by Cloudpods before the bundle is published.
 
 GitHub does not publish a native RISC-V Actions Runner. On a dedicated build
 machine, install the pinned official x64 Runner control process with:

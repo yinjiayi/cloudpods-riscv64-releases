@@ -11,6 +11,8 @@ source "${config_file}"
 : "${NODE_IP:?}"
 : "${POD_NODE_CIDR:?}"
 : "${GHCR_NAMESPACE:=ghcr.io/yinjiayi}"
+: "${NTP_POOLS:=pool.ntp.org}"
+: "${NTP_SERVERS:=}"
 
 if [[ ${EUID} -ne 0 ]]; then
     echo "Run as root" >&2
@@ -144,7 +146,8 @@ cat >/etc/systemd/system/containerd.service <<'EOF'
 [Unit]
 Description=containerd container runtime
 Documentation=https://containerd.io
-After=network.target local-fs.target
+After=network.target local-fs.target cloudpods-time-sync.service
+Requires=cloudpods-time-sync.service
 
 [Service]
 ExecStartPre=-/sbin/modprobe overlay
@@ -159,6 +162,34 @@ LimitCORE=infinity
 LimitNOFILE=1048576
 TasksMax=infinity
 OOMScoreAdjust=-999
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat >/etc/chrony.conf <<EOF
+driftfile /var/lib/chrony/drift
+makestep 1.0 3
+rtcsync
+$(for ntp_pool in ${NTP_POOLS}; do printf 'pool %s iburst\n' "${ntp_pool}"; done)
+$(for ntp_server in ${NTP_SERVERS}; do printf 'server %s iburst\n' "${ntp_server}"; done)
+EOF
+
+cat >/etc/systemd/system/cloudpods-time-sync.service <<'EOF'
+[Unit]
+Description=Synchronize time before Kubernetes and containerd start
+After=network-online.target chronyd.service
+Wants=network-online.target
+Requires=chronyd.service
+Before=containerd.service kubelet.service kube-proxy.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/chronyc -a online
+ExecStart=/usr/bin/chronyc -a burst 4/4
+ExecStart=/usr/bin/chronyc -a makestep
+ExecStart=/usr/bin/chronyc waitsync 120 1.0 1000000 1
+RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
@@ -200,7 +231,9 @@ EOF
 
 systemctl daemon-reload
 install -d -o chrony -g chrony -m 0750 /var/lib/chrony
-systemctl enable --now chronyd containerd cloudpods-openruyi-nftables
+systemctl enable chronyd cloudpods-time-sync containerd cloudpods-openruyi-nftables
+systemctl restart chronyd
+systemctl start cloudpods-time-sync containerd cloudpods-openruyi-nftables
 
 pause_source=${GHCR_NAMESPACE}/k8s-pause:3.10.2-riscv64.1
 coredns_source=${GHCR_NAMESPACE}/k8s-coredns:1.14.2-riscv64.1

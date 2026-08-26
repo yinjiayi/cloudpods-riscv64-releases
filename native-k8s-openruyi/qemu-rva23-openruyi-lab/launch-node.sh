@@ -152,6 +152,7 @@ rm -f "${serial_socket}" "${monitor_socket}" "${pid_file}"
     -machine virt,pflash0=pflash0,pflash1=pflash1 \
     -accel tcg,thread=multi \
     -cpu "${cpu_model}" \
+    -rtc base=utc,clock=host \
     -smp "${vcpus}" \
     -m "${memory_mib}" \
     -blockdev node-name=pflash0,driver=file,read-only=on,filename="${firmware_code}" \

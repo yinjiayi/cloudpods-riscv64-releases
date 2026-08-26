@@ -14,7 +14,7 @@ source "${config_file}"
 
 qemu_version=11.1.0
 qemu_archive=qemu-${qemu_version}-openruyi-2026.07-riscv64.tar.gz
-qemu_sha256=ed4c2856dfc0ef8ba38ea909426d1b33f6b6c1ed215def643eb102fbf1842e87
+qemu_sha256=2fdc2afd0ede5ea4daddf8a668744817d3105e6ea810a58e7ebbb0e979c304c9
 
 if [[ ${EUID} -ne 0 ]]; then
     echo "Run as root" >&2
@@ -60,7 +60,10 @@ if [[ -L /usr/bin/docker ]] \
 fi
 
 qemu_prefix=/usr/local/qemu-${qemu_version}
-if [[ ! -x ${qemu_prefix}/bin/qemu-system-riscv64 ]]; then
+qemu_marker=${qemu_prefix}/.cloudpods-bundle-sha256
+if [[ ! -x ${qemu_prefix}/bin/qemu-system-riscv64 ]] \
+    || [[ ! -s ${qemu_marker} ]] \
+    || [[ $(<"${qemu_marker}") != "${qemu_sha256}" ]]; then
     work_dir=$(mktemp -d)
     cleanup() {
         rm -rf "${work_dir}"
@@ -72,6 +75,7 @@ if [[ ! -x ${qemu_prefix}/bin/qemu-system-riscv64 ]]; then
     printf '%s  %s\n' "${qemu_sha256}" "${work_dir}/${qemu_archive}" \
         | sha256sum --check
     tar -xzf "${work_dir}/${qemu_archive}" -C /usr/local
+    printf '%s\n' "${qemu_sha256}" >"${qemu_marker}"
     cleanup
     trap - EXIT
 fi
@@ -157,6 +161,25 @@ test -S /var/run/onecloud/exec.sock
 qemu_bin=${qemu_prefix}/bin/qemu-system-riscv64
 test -x "${qemu_bin}"
 "${qemu_bin}" --version | grep -F 'version 11.1.0'
+ldd "${qemu_bin}" | grep -F 'libnettle.so'
+
+# Cloudpods configures a password-protected VNC endpoint for every guest.  A
+# timeout proves that QEMU stayed alive instead of rejecting the DES-RFB
+# cipher because the crypto backend was omitted from the build.
+set +e
+timeout 2 "${qemu_bin}" \
+    -machine virt \
+    -nodefaults \
+    -S \
+    -bios none \
+    -vnc :99,password \
+    >/dev/null 2>&1
+vnc_test_rc=$?
+set -e
+if [[ ${vnc_test_rc} -ne 124 ]]; then
+    echo "QEMU VNC DES-RFB self-test failed with status ${vnc_test_rc}" >&2
+    exit 1
+fi
 
 kernel=/boot/vmlinuz-$(uname -r)
 initramfs=/boot/initramfs-$(uname -r).img

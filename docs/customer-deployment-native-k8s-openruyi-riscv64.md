@@ -92,6 +92,8 @@ SERVICE_CIDR=10.96.0.0/12
 CLUSTER_DNS=10.96.0.10
 CLUSTER_NAME=cloudpods-openruyi
 GHCR_NAMESPACE=ghcr.io/yinjiayi
+NTP_POOLS=pool.ntp.org
+NTP_SERVERS=
 ARTIFACT_BASE_URL=https://github.com/yinjiayi/cloudpods-riscv64-releases/releases/download/openruyi-native-k8s-v4.0.3-riscv64.1
 CONTROL_PLANE_IP=192.168.50.10
 HOST_NETWORK_INTERFACE=eth0
@@ -105,6 +107,11 @@ MYSQL_PASSWORD=替换为openssl_rand_hex_24生成的值
 ADMIN_PASSWORD=替换为openssl_rand_hex_24生成的值
 LAB_TCG_FALLBACK=false
 ```
+
+`NTP_POOLS` 和 `NTP_SERVERS` 均可填写一个或多个以空格分隔的地址。生产
+环境应将 `NTP_POOLS` 留空，并在 `NTP_SERVERS` 填写内网 NTP；脚本会在
+containerd 和 kubelet 启动前等待时钟同步，避免节点重启后的时间回退造成
+容器状态异常。
 
 密码仅允许字母、数字、点、下划线和连字符，长度为 16-128。可分别执行 `openssl rand -hex 24` 生成。确认管理网卡承载管理 IP：
 
@@ -240,7 +247,20 @@ cd /root/cloudpods-riscv64-releases/native-k8s-openruyi
 3. 网络使用独立静态地址池，或使用现场已确认可分配的 DHCP 网络。
 4. 确认虚机状态为运行、UEFI 控制台出现 openRuyi 登录提示。
 5. 确认虚机获得地址，管理网能够 ping 和 SSH 到该地址。
-6. 重启两台宿主机，确认 Kubernetes、Cloudpods、两台 Host 和虚机能够恢复。
+6. 在虚机内执行一次 `reboot`，确认 SSH 恢复且系统仍为 `riscv64/openRuyi/KVM`。
+7. 依次重启计算节点和主节点，确认 Kubernetes、Cloudpods 和两台 Host 恢复；
+   计算节点正常关机时 Cloudpods 会关闭其上的虚机，节点恢复后从 Cloudpods
+   重新启动测试虚机，并再次确认 SSH 可用。
+
+openRuyi 官方云镜像首次启动会用 `systemd-repart` 扩展系统盘。确认根分区已扩展
+到预期大小后，如果后续启动仅因“无剩余空间”导致该服务失败，可在虚机内执行：
+
+```bash
+systemctl mask systemd-repart.service
+systemctl reset-failed
+```
+
+执行前必须先用 `lsblk` 和 `df -h /` 确认根分区已成功扩展，不可用于尚未扩容的镜像。
 
 只有上述项目全部通过，才视为交付完成。
 

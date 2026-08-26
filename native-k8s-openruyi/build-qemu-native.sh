@@ -90,6 +90,7 @@ timeout 2 "${qemu_prefix}/bin/qemu-system-riscv64" \
     -machine virt \
     -nodefaults \
     -S \
+    -bios none \
     -vnc :99,password \
     >/dev/null 2>&1
 vnc_test_rc=$?

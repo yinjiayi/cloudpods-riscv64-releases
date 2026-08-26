@@ -10,6 +10,8 @@ source "${config_file}"
 : "${NODE_IP:?}"
 
 export KUBECONFIG=/etc/kubernetes/admin.conf
+systemctl is-active --quiet chronyd cloudpods-time-sync
+chronyc tracking | grep -Eq '^Leap status[[:space:]]*:[[:space:]]*Normal$'
 kubectl version --client=true
 kubectl get --raw=/readyz | grep -qx ok
 
