@@ -8,7 +8,7 @@ if [[ ${EUID} -ne 0 ]]; then
 fi
 
 images=(
-    ghcr.io/yinjiayi/cloudpods:v4.0.3-riscv64.6
+    ghcr.io/yinjiayi/cloudpods:v4.0.3-riscv64.7
     ghcr.io/yinjiayi/onecloud-operator:v4.0.3-riscv64.4
     ghcr.io/yinjiayi/cloudpods-web:v4.0.3-riscv64-ui2
     ghcr.io/yinjiayi/etcd:3.5.24-riscv64.1
@@ -28,8 +28,8 @@ tag_image() {
     ctr --namespace k8s.io images tag --force "$1" "$2" >/dev/null
 }
 
-tag_image ghcr.io/yinjiayi/cloudpods:v4.0.3-riscv64.6 \
-    localhost/cloudpods/cloudpods:v4.0.3-riscv64.6
+tag_image ghcr.io/yinjiayi/cloudpods:v4.0.3-riscv64.7 \
+    localhost/cloudpods/cloudpods:v4.0.3-riscv64.7
 tag_image ghcr.io/yinjiayi/onecloud-operator:v4.0.3-riscv64.4 \
     localhost/cloudpods/onecloud-operator:v4.0.3-riscv64.4
 tag_image ghcr.io/yinjiayi/cloudpods-web:v4.0.3-riscv64-ui2 \
@@ -63,7 +63,7 @@ tag_image ghcr.io/yinjiayi/victoria-metrics:v1.129.1-1-riscv64.1 \
     'registry.cn-beijing.aliyuncs.com/yunionio/victoria-metrics:v1.129.1-1@sha256:dcc60e6b67a701db2e09350f357dbdf32ede557aaddf41818883ac412a19c01f'
 
 for image in \
-    localhost/cloudpods/cloudpods:v4.0.3-riscv64.6 \
+    localhost/cloudpods/cloudpods:v4.0.3-riscv64.7 \
     localhost/cloudpods/onecloud-operator:v4.0.3-riscv64.4 \
     localhost/cloudpods/web:v4.0.3-riscv64-ui2 \
     localhost/cloudpods/etcd:3.5.24; do

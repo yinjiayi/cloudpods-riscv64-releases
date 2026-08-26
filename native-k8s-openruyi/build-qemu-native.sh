@@ -65,11 +65,20 @@ install -m 0755 \
     build/qemu-io \
     build/qemu-nbd \
     "${qemu_prefix}/bin/"
+install -d -m 0755 "${qemu_prefix}/share/qemu"
+install -m 0644 \
+    pc-bios/efi-virtio.rom \
+    pc-bios/pxe-virtio.rom \
+    "${qemu_prefix}/share/qemu/"
+cp -a pc-bios/keymaps "${qemu_prefix}/share/qemu/"
 
 "${qemu_prefix}/bin/qemu-system-riscv64" --version \
     | grep -F "version ${qemu_version}"
 "${qemu_prefix}/bin/qemu-system-riscv64" -machine virt -cpu help 2>&1 \
     | grep -qx '  rva23s64'
+test -s "${qemu_prefix}/share/qemu/efi-virtio.rom"
+test -s "${qemu_prefix}/share/qemu/pxe-virtio.rom"
+test -s "${qemu_prefix}/share/qemu/keymaps/en-us"
 
 archive=qemu-${qemu_version}-openruyi-2026.07-riscv64.tar.gz
 install -d -m 0755 "${output_dir}"

@@ -1,4 +1,4 @@
-localhost/cloudpods/cloudpods:v4.0.3-riscv64.6	ghcr.io/yinjiayi/cloudpods:v4.0.3-riscv64.6
+localhost/cloudpods/cloudpods:v4.0.3-riscv64.7	ghcr.io/yinjiayi/cloudpods:v4.0.3-riscv64.7
 localhost/cloudpods/cloudpods:v4.0.3-riscv64.6	ghcr.io/yinjiayi/climc:v4.0.3-riscv64.6
 localhost/cloudpods/cloudpods:v4.0.3-riscv64.6	ghcr.io/yinjiayi/cloudproxy:v4.0.3-riscv64.6
 localhost/cloudpods/cloudpods:v4.0.3-riscv64.6	ghcr.io/yinjiayi/region-dns:v4.0.3-riscv64.6

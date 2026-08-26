@@ -1,0 +1,9 @@
+FROM ghcr.io/yinjiayi/cloudpods:v4.0.3-riscv64.6
+
+ARG SOURCE_COMMIT
+ARG VERSION
+LABEL org.opencontainers.image.source="https://github.com/yinjiayi/cloudpods" \
+      org.opencontainers.image.revision="${SOURCE_COMMIT}" \
+      org.opencontainers.image.version="${VERSION}"
+
+COPY --chmod=0755 rootfs/opt/yunion/bin/host /opt/yunion/bin/host
