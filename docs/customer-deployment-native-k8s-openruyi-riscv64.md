@@ -16,7 +16,7 @@
 | cri-tools | v1.36.0 |
 | CNI plugins | v1.9.1 |
 | QEMU | v11.1.0，RISC-V 原生构建，支持 KVM/RVA23 |
-| Cloudpods | v4.0.3-riscv64.7 |
+| Cloudpods | v4.0.3-riscv64.8 |
 | Dashboard | v4.0.3-riscv64-ui2 |
 | Cloudpods Operator | v4.0.3-riscv64.4 |
 

@@ -7,3 +7,4 @@ LABEL org.opencontainers.image.source="https://github.com/yinjiayi/cloudpods" \
       org.opencontainers.image.version="${VERSION}"
 
 COPY --chmod=0755 rootfs/opt/yunion/bin/host /opt/yunion/bin/host
+COPY --chmod=0755 rootfs/opt/yunion/bin/region /opt/yunion/bin/region

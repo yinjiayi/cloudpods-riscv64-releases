@@ -50,25 +50,12 @@ dnf install -y \
     openvswitch \
     pixman
 
-# Cloudpods v4.0.3 still asks the host executor for `docker info` only to
-# discover the image filesystem.  Native Kubernetes uses containerd here, so
-# provide the narrow compatibility response until the runtime-neutral upstream
-# change is included in a Cloudpods image.  Never replace a real Docker CLI.
-if ! command -v docker >/dev/null 2>&1; then
-    cat >/usr/local/sbin/cloudpods-container-runtime-info <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-if [[ ${1:-} == info && ${2:-} == --format ]]; then
-    test -d /var/lib/containerd
-    printf '{"ID":"%s","Driver":"overlayfs","DockerRootDir":"/var/lib/containerd"}\n' \
-        "$(cat /etc/machine-id)"
-    exit 0
-fi
-echo "Only 'docker info --format' is provided for Cloudpods containerd compatibility" >&2
-exit 64
-EOF
-    chmod 0755 /usr/local/sbin/cloudpods-container-runtime-info
-    ln -s /usr/local/sbin/cloudpods-container-runtime-info /usr/bin/docker
+# Remove the compatibility shim installed by early preview revisions.  The
+# published Cloudpods image discovers containerd's image filesystem directly.
+if [[ -L /usr/bin/docker ]] \
+    && [[ $(readlink /usr/bin/docker) == /usr/local/sbin/cloudpods-container-runtime-info ]]; then
+    unlink /usr/bin/docker
+    rm -f /usr/local/sbin/cloudpods-container-runtime-info
 fi
 
 qemu_prefix=/usr/local/qemu-${qemu_version}

@@ -1,4 +1,4 @@
-name: Build openRuyi Cloudpods Host image
+name: Build openRuyi Cloudpods runtime image
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ permissions:
 
 env:
   CLOUDPODS_COMMIT: 6d7460e50f1d529d85d9e31f2bef456429d4e5ee
-  CLOUDPODS_VERSION: v4.0.3-riscv64.7
+  CLOUDPODS_VERSION: v4.0.3-riscv64.8
 
 jobs:
   build:
@@ -31,15 +31,17 @@ jobs:
           go-version: '1.24.x'
           cache-dependency-path: cloudpods/go.sum
 
-      - name: Build riscv64 Host
+      - name: Build matching riscv64 Host and Region
         shell: bash
         run: |
           set -euo pipefail
-          GOARCH=riscv64 make -C cloudpods cmd/host
-          install -D -m 0755 \
-            cloudpods/_output/bin/host \
-            image-root/rootfs/opt/yunion/bin/host
-          file image-root/rootfs/opt/yunion/bin/host
+          GOARCH=riscv64 make -C cloudpods cmd/host cmd/region
+          for binary in host region; do
+            install -D -m 0755 \
+              "cloudpods/_output/bin/${binary}" \
+              "image-root/rootfs/opt/yunion/bin/${binary}"
+            file "image-root/rootfs/opt/yunion/bin/${binary}"
+          done
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -62,4 +64,3 @@ jobs:
           build-args: |
             SOURCE_COMMIT=${{ env.CLOUDPODS_COMMIT }}
             VERSION=${{ env.CLOUDPODS_VERSION }}
-
