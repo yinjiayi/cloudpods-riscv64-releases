@@ -14,7 +14,7 @@ source "${config_file}"
 
 qemu_version=11.1.0
 qemu_archive=qemu-${qemu_version}-openruyi-2026.07-riscv64.tar.gz
-qemu_sha256=514512f2ea30129f72b53bd2f0bb5bea06c18611f168f5552af3b0572b7ba774
+qemu_sha256=ed4c2856dfc0ef8ba38ea909426d1b33f6b6c1ed215def643eb102fbf1842e87
 
 if [[ ${EUID} -ne 0 ]]; then
     echo "Run as root" >&2
