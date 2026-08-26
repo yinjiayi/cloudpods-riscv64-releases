@@ -1,0 +1,90 @@
+name: Publish openRuyi Kubernetes riscv64 images
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/openruyi-native-k8s
+    paths:
+      - .github/workflows/openruyi-k8s-images.yml
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  RELEASE_TAG: openruyi-native-k8s-v4.0.3-riscv64.1
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: coredns
+            image: k8s-coredns
+            tag: 1.14.2-riscv64.1
+            asset: coredns-v1.14.2-linux-riscv64
+            entrypoint: coredns
+          - component: pause
+            image: k8s-pause
+            tag: 3.10.2-riscv64.1
+            asset: pause-3.10.2-linux-riscv64
+            entrypoint: pause
+          - component: kube-proxy
+            image: k8s-kube-proxy
+            tag: v1.36.4-riscv64.1
+            asset: kubernetes-v1.36.4-linux-riscv64.tar.gz
+            entrypoint: kube-proxy
+    steps:
+      - name: Download verified release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download "${RELEASE_TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pattern "${{ matrix.asset }}"
+          case "${{ matrix.component }}" in
+            coredns)
+              echo '3529b2ddd9dd1118bf17c79039dc881696f267257471a6c1ecccd8fce2891e68  coredns-v1.14.2-linux-riscv64' | sha256sum -c -
+              install -m 0755 coredns-v1.14.2-linux-riscv64 entrypoint
+              ;;
+            pause)
+              echo '59af553b45bd741099f058319003df2f54e2442a3497c32eb5558debc4c365c9  pause-3.10.2-linux-riscv64' | sha256sum -c -
+              install -m 0755 pause-3.10.2-linux-riscv64 entrypoint
+              ;;
+            kube-proxy)
+              echo '68938df789c1f341df8d2acd8fd99cc1ff8d82a0998677f12eca4fd21b23ff62  kubernetes-v1.36.4-linux-riscv64.tar.gz' | sha256sum -c -
+              tar -xzf kubernetes-v1.36.4-linux-riscv64.tar.gz \
+                --strip-components=1 \
+                kubernetes-v1.36.4-linux-riscv64/kube-proxy
+              install -m 0755 kube-proxy entrypoint
+              ;;
+          esac
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and publish riscv64 image
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ matrix.tag }}
+          ENTRYPOINT: ${{ matrix.entrypoint }}
+        run: |
+          set -euo pipefail
+          mkdir context
+          install -m 0755 entrypoint "context/${ENTRYPOINT}"
+          printf 'FROM scratch\nCOPY %s /%s\nENTRYPOINT ["/%s"]\n' \
+            "${ENTRYPOINT}" "${ENTRYPOINT}" "${ENTRYPOINT}" >context/Dockerfile
+          docker buildx build \
+            --platform linux/riscv64 \
+            --provenance=false \
+            --tag "${IMAGE}" \
+            --push \
+            context
