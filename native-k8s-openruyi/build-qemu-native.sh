@@ -27,6 +27,7 @@ dnf install -y \
     libslirp-devel \
     liburing-devel \
     make \
+    nettle-devel \
     ninja-build \
     pixman-devel \
     pkgconf-pkg-config \
@@ -54,6 +55,7 @@ cd "${work_dir}/qemu-${qemu_version}"
     --prefix="${qemu_prefix}" \
     --target-list=riscv64-softmmu \
     --enable-kvm \
+    --enable-nettle \
     --enable-slirp \
     --disable-docs
 ninja -C build -j "$(nproc)" \
@@ -79,6 +81,23 @@ cp -a pc-bios/keymaps "${qemu_prefix}/share/qemu/"
 test -s "${qemu_prefix}/share/qemu/efi-virtio.rom"
 test -s "${qemu_prefix}/share/qemu/pxe-virtio.rom"
 test -s "${qemu_prefix}/share/qemu/keymaps/en-us"
+
+# Cloudpods protects the VNC endpoint with a password. QEMU's built-in crypto
+# fallback does not implement the DES-RFB cipher, so prove the Nettle backend
+# before publishing the runtime bundle. A timeout means QEMU stayed alive.
+set +e
+timeout 2 "${qemu_prefix}/bin/qemu-system-riscv64" \
+    -machine virt \
+    -nodefaults \
+    -S \
+    -vnc :99,password \
+    >/dev/null 2>&1
+vnc_test_rc=$?
+set -e
+if [[ ${vnc_test_rc} -ne 124 ]]; then
+    echo "QEMU VNC DES-RFB self-test failed with status ${vnc_test_rc}" >&2
+    exit 1
+fi
 
 archive=qemu-${qemu_version}-openruyi-2026.07-riscv64.tar.gz
 install -d -m 0755 "${output_dir}"

@@ -47,6 +47,7 @@ dnf install -y \
     libslirp \
     liburing \
     mariadb \
+    nettle \
     openvswitch \
     pixman
 
