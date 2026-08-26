@@ -9,7 +9,7 @@ fi
 
 images=(
     ghcr.io/yinjiayi/cloudpods:v4.0.3-riscv64.6
-    ghcr.io/yinjiayi/onecloud-operator:v4.0.3-riscv64.3
+    ghcr.io/yinjiayi/onecloud-operator:v4.0.3-riscv64.4
     ghcr.io/yinjiayi/cloudpods-web:v4.0.3-riscv64-ui2
     ghcr.io/yinjiayi/etcd:3.5.24-riscv64.1
     ghcr.io/yinjiayi/host-image:v1.0.8-riscv64.1
@@ -30,8 +30,8 @@ tag_image() {
 
 tag_image ghcr.io/yinjiayi/cloudpods:v4.0.3-riscv64.6 \
     localhost/cloudpods/cloudpods:v4.0.3-riscv64.6
-tag_image ghcr.io/yinjiayi/onecloud-operator:v4.0.3-riscv64.3 \
-    localhost/cloudpods/onecloud-operator:v4.0.3-riscv64.3
+tag_image ghcr.io/yinjiayi/onecloud-operator:v4.0.3-riscv64.4 \
+    localhost/cloudpods/onecloud-operator:v4.0.3-riscv64.4
 tag_image ghcr.io/yinjiayi/cloudpods-web:v4.0.3-riscv64-ui2 \
     localhost/cloudpods/web:v4.0.3-riscv64-ui2
 tag_image ghcr.io/yinjiayi/etcd:3.5.24-riscv64.1 \
@@ -64,7 +64,7 @@ tag_image ghcr.io/yinjiayi/victoria-metrics:v1.129.1-1-riscv64.1 \
 
 for image in \
     localhost/cloudpods/cloudpods:v4.0.3-riscv64.6 \
-    localhost/cloudpods/onecloud-operator:v4.0.3-riscv64.3 \
+    localhost/cloudpods/onecloud-operator:v4.0.3-riscv64.4 \
     localhost/cloudpods/web:v4.0.3-riscv64-ui2 \
     localhost/cloudpods/etcd:3.5.24; do
     ctr --namespace k8s.io images list -q | grep -Fx "${image}"

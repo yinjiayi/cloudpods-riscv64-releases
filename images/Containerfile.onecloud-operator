@@ -7,5 +7,3 @@ LABEL org.opencontainers.image.source="https://github.com/yunionio/onecloud-oper
       org.opencontainers.image.version="${VERSION}"
 
 COPY rootfs/bin/onecloud-controller-manager /bin/onecloud-controller-manager
-
-RUN chmod 0755 /bin/onecloud-controller-manager

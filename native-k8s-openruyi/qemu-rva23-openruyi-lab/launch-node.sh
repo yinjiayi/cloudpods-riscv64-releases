@@ -122,7 +122,7 @@ EOF
 [connection]
 id=cloudpods-cluster
 type=ethernet
-interface-name=eth1
+interface-name=eth0
 autoconnect=true
 
 [ethernet]

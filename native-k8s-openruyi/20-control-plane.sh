@@ -25,8 +25,8 @@ install -d -m 0700 /etc/kubernetes/pki
 install -d -m 0755 \
     "${bootstrap_dir}" \
     /etc/kubernetes/manifests \
-    /var/lib/etcd \
     /var/lib/kubelet
+install -d -m 0700 /var/lib/etcd
 
 cat >"${kubeadm_config}" <<EOF
 apiVersion: kubeadm.k8s.io/v1beta4
@@ -81,7 +81,7 @@ clusterDNS:
   - ${CLUSTER_DNS}
 clusterDomain: cluster.local
 failSwapOn: false
-resolvConf: /etc/resolv.conf
+resolvConf: /run/systemd/resolve/resolv.conf
 rotateCertificates: true
 serverTLSBootstrap: false
 staticPodPath: /etc/kubernetes/manifests
@@ -93,6 +93,39 @@ fi
 if [[ ! -s "${kubeconfig}" ]]; then
     kubeadm init phase kubeconfig all --config "${kubeadm_config}"
 fi
+
+if [[ ! -s /etc/kubernetes/pki/kube-proxy.crt ]]; then
+    openssl genrsa -out /etc/kubernetes/pki/kube-proxy.key 2048
+    openssl req -new \
+        -key /etc/kubernetes/pki/kube-proxy.key \
+        -out /etc/kubernetes/pki/kube-proxy.csr \
+        -subj '/CN=system:kube-proxy/O=system:node-proxier'
+    openssl x509 -req \
+        -in /etc/kubernetes/pki/kube-proxy.csr \
+        -CA /etc/kubernetes/pki/ca.crt \
+        -CAkey /etc/kubernetes/pki/ca.key \
+        -CAcreateserial \
+        -out /etc/kubernetes/pki/kube-proxy.crt \
+        -days 3650 \
+        -sha256
+    rm -f /etc/kubernetes/pki/kube-proxy.csr
+fi
+
+kubectl config set-cluster "${CLUSTER_NAME}" \
+    --certificate-authority=/etc/kubernetes/pki/ca.crt \
+    --embed-certs=true \
+    --server="https://${NODE_IP}:6443" \
+    --kubeconfig=/etc/kubernetes/kube-proxy.conf
+kubectl config set-credentials system:kube-proxy \
+    --client-certificate=/etc/kubernetes/pki/kube-proxy.crt \
+    --client-key=/etc/kubernetes/pki/kube-proxy.key \
+    --embed-certs=true \
+    --kubeconfig=/etc/kubernetes/kube-proxy.conf
+kubectl config set-context default \
+    --cluster="${CLUSTER_NAME}" \
+    --user=system:kube-proxy \
+    --kubeconfig=/etc/kubernetes/kube-proxy.conf
+kubectl config use-context default --kubeconfig=/etc/kubernetes/kube-proxy.conf
 
 cat >/etc/systemd/system/etcd.service <<EOF
 [Unit]
@@ -173,7 +206,7 @@ clusterDNS:
   - ${CLUSTER_DNS}
 clusterDomain: cluster.local
 failSwapOn: false
-resolvConf: /etc/resolv.conf
+resolvConf: /run/systemd/resolve/resolv.conf
 rotateCertificates: true
 serverTLSBootstrap: false
 staticPodPath: /etc/kubernetes/manifests
@@ -181,6 +214,17 @@ EOF
 
 cat >/etc/sysconfig/kubelet <<EOF
 KUBELET_EXTRA_ARGS=--hostname-override=${NODE_NAME} --node-ip=${NODE_IP} --container-runtime-endpoint=unix:///run/containerd/containerd.sock --kubeconfig=/etc/kubernetes/kubelet.conf
+EOF
+
+install -d -m 0755 /var/lib/kube-proxy
+cat >/var/lib/kube-proxy/config.conf <<EOF
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+bindAddress: 0.0.0.0
+clientConnection:
+  kubeconfig: /etc/kubernetes/kube-proxy.conf
+clusterCIDR: ${POD_CIDR}
+mode: nftables
 EOF
 
 systemctl daemon-reload
@@ -199,7 +243,7 @@ ${api_ready}
 systemctl enable --now kube-controller-manager kube-scheduler
 kubeadm init phase upload-config all --config "${kubeadm_config}"
 kubeadm init phase bootstrap-token --config "${kubeadm_config}"
-systemctl enable --now kubelet
+systemctl enable --now kubelet kube-proxy
 
 node_registered=false
 for _ in {1..180}; do
@@ -216,7 +260,6 @@ kubectl --kubeconfig="${kubeconfig}" label node "${NODE_NAME}" \
 kubectl --kubeconfig="${kubeconfig}" taint node "${NODE_NAME}" \
     node-role.kubernetes.io/control-plane- 2>/dev/null || true
 kubeadm init phase addon coredns --config "${kubeadm_config}"
-kubeadm init phase addon kube-proxy --config "${kubeadm_config}"
 
 install -d -m 0700 /root/.kube
 install -m 0600 "${kubeconfig}" /root/.kube/config
@@ -226,7 +269,7 @@ for _ in {1..240}; do
     if kubectl --kubeconfig="${kubeconfig}" get node "${NODE_NAME}" \
         -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' | grep -qx True \
         && kubectl --kubeconfig="${kubeconfig}" -n kube-system rollout status deployment/coredns --timeout=2s >/dev/null 2>&1 \
-        && kubectl --kubeconfig="${kubeconfig}" -n kube-system rollout status daemonset/kube-proxy --timeout=2s >/dev/null 2>&1; then
+        && systemctl is-active --quiet kube-proxy; then
         ready=true
         break
     fi

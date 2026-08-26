@@ -1,0 +1,67 @@
+name: Build openRuyi Cloudpods Operator image
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  OPERATOR_COMMIT: 1d7d423b3b65f41a0c59ac217ac9212a369a923e
+  OPERATOR_VERSION: v4.0.3-riscv64.4
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout release repository
+        uses: actions/checkout@v4
+
+      - name: Checkout adapted Operator
+        uses: actions/checkout@v4
+        with:
+          repository: yinjiayi/cloudpods-operator
+          ref: ${{ env.OPERATOR_COMMIT }}
+          path: onecloud-operator
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache-dependency-path: onecloud-operator/go.sum
+
+      - name: Build riscv64 Operator
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d image-root/rootfs/bin
+          make -C onecloud-operator \
+            VERSION=v4.0.3 \
+            GOARCH=riscv64 \
+            BIN_DIR="$PWD/image-root/rootfs/bin" \
+            onecloud-operator
+          file image-root/rootfs/bin/onecloud-controller-manager
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish image
+        uses: docker/build-push-action@v6
+        with:
+          context: image-root
+          file: images/Containerfile.onecloud-operator
+          platforms: linux/riscv64
+          push: true
+          tags: ghcr.io/yinjiayi/onecloud-operator:${{ env.OPERATOR_VERSION }}
+          build-args: |
+            SOURCE_COMMIT=${{ env.OPERATOR_COMMIT }}
+            VERSION=${{ env.OPERATOR_VERSION }}
+

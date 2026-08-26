@@ -29,23 +29,38 @@ if [[ ${EUID} -ne 0 ]]; then
 fi
 
 ip -4 address show | grep -Fq "${NODE_IP}/"
+test -s /etc/kubernetes/kube-proxy.conf
+
 install -d -m 0755 /etc/kubernetes
 
 cat >/etc/sysconfig/kubelet <<EOF
-KUBELET_EXTRA_ARGS=--hostname-override=${NODE_NAME} --node-ip=${NODE_IP} --container-runtime-endpoint=unix:///run/containerd/containerd.sock
+KUBELET_EXTRA_ARGS=--hostname-override=${NODE_NAME} --node-ip=${NODE_IP} --container-runtime-endpoint=unix:///run/containerd/containerd.sock --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf
 EOF
 
+systemctl enable kubelet
 if [[ ! -s /etc/kubernetes/kubelet.conf ]]; then
     kubeadm join "${CONTROL_PLANE_IP}:6443" \
         --token "${token}" \
         --discovery-token-ca-cert-hash "${ca_hash}" \
         --node-name "${NODE_NAME}" \
-        --cri-socket unix:///run/containerd/containerd.sock
+        --cri-socket unix:///run/containerd/containerd.sock \
+        --ignore-preflight-errors=SystemVerification
 fi
 
+install -d -m 0755 /var/lib/kube-proxy
+cat >/var/lib/kube-proxy/config.conf <<EOF
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+bindAddress: 0.0.0.0
+clientConnection:
+  kubeconfig: /etc/kubernetes/kube-proxy.conf
+clusterCIDR: ${POD_CIDR}
+mode: nftables
+EOF
+
 systemctl daemon-reload
-systemctl enable kubelet
-systemctl restart kubelet
+systemctl enable kubelet kube-proxy
+systemctl restart kubelet kube-proxy
 
 node_ready=false
 for _ in {1..180}; do
@@ -67,4 +82,4 @@ if [[ ${allocated_cidr} != "${POD_NODE_CIDR}" ]]; then
 fi
 
 kubectl --kubeconfig=/etc/kubernetes/kubelet.conf get node "${NODE_NAME}" -o wide
-echo NATIVE_K8S_WORKER_OK
+echo OPENRUYI_NATIVE_K8S_WORKER_OK

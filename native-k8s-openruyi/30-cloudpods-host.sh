@@ -10,6 +10,11 @@ source "${config_file}"
 : "${HOST_DISK_PATH:=/opt/cloud/workspace/disks}"
 : "${HOST_NETWORK_INTERFACE:?Set HOST_NETWORK_INTERFACE in ${config_file}}"
 : "${NODE_IP:?Set NODE_IP in ${config_file}}"
+: "${ARTIFACT_BASE_URL:=https://github.com/yinjiayi/cloudpods-riscv64-releases/releases/download/openruyi-native-k8s-v4.0.3-riscv64.1}"
+
+qemu_version=11.1.0
+qemu_archive=qemu-${qemu_version}-openruyi-2026.07-riscv64.tar.gz
+qemu_sha256=514512f2ea30129f72b53bd2f0bb5bea06c18611f168f5552af3b0572b7ba774
 
 if [[ ${EUID} -ne 0 ]]; then
     echo "Run as root" >&2
@@ -36,8 +41,31 @@ curl -fsSL \
 dnf install -y \
     cloudpods-executor \
     cloudpods-riscv-firmware \
-    mariadb-server \
-    openvswitch
+    glib \
+    libaio \
+    libcap-ng \
+    libslirp \
+    liburing \
+    mariadb \
+    openvswitch \
+    pixman
+
+qemu_prefix=/usr/local/qemu-${qemu_version}
+if [[ ! -x ${qemu_prefix}/bin/qemu-system-riscv64 ]]; then
+    work_dir=$(mktemp -d)
+    cleanup() {
+        rm -rf "${work_dir}"
+    }
+    trap cleanup EXIT
+    curl --fail --location --retry 5 \
+        --output "${work_dir}/${qemu_archive}" \
+        "${ARTIFACT_BASE_URL}/${qemu_archive}"
+    printf '%s  %s\n' "${qemu_sha256}" "${work_dir}/${qemu_archive}" \
+        | sha256sum --check
+    tar -xzf "${work_dir}/${qemu_archive}" -C /usr/local
+    cleanup
+    trap - EXIT
+fi
 
 # mysql/openvswitch dependencies can install SELinux policy after
 # 10-runtime.sh has already run.  Keep the supported permissive setting both
@@ -114,12 +142,16 @@ for _ in {1..30}; do
 done
 
 test -S /var/run/onecloud/exec.sock
-qemu_bin=/usr/local/qemu-11.1.0/bin/qemu-system-riscv64
+qemu_bin=${qemu_prefix}/bin/qemu-system-riscv64
 test -x "${qemu_bin}"
 "${qemu_bin}" --version | grep -F 'version 11.1.0'
 
 kernel=/boot/vmlinuz-$(uname -r)
 initramfs=/boot/initramfs-$(uname -r).img
+if [[ ! -s ${kernel} ]]; then
+    kernel=/boot/efi/openruyi/$(uname -r)/linux
+    initramfs=/boot/efi/openruyi/$(uname -r)/initrd
+fi
 test -s "${kernel}"
 test -s "${initramfs}"
 kvm_log=/var/log/cloudpods-riscv64-kvm-smoke.log
@@ -138,11 +170,12 @@ timeout 30 "${qemu_bin}" \
     >"${kvm_log}" 2>&1
 kvm_status=$?
 set -e
-if [[ ${kvm_status} -ne 0 && ${kvm_status} -ne 124 ]]; then
+if [[ ${kvm_status} -ne 124 ]]; then
     cat "${kvm_log}" >&2
-    exit "${kvm_status}"
+    echo "KVM smoke test exited before the 30-second acceptance window (status ${kvm_status})" >&2
+    exit 1
 fi
 grep -F 'Linux version' "${kvm_log}"
-grep -F 'Detected architecture riscv64' "${kvm_log}"
+grep -F 'Machine model: riscv-virtio,qemu' "${kvm_log}"
 
 echo CLOUDPODS_HOST_PREREQUISITES_OK

@@ -73,7 +73,8 @@ test -S /var/run/onecloud/exec.sock
 test -c /dev/kvm
 /usr/local/qemu-11.1.0/bin/qemu-system-riscv64 --version | grep -F 'version 11.1.0'
 grep -F 'Linux version' /var/log/cloudpods-riscv64-kvm-smoke.log
-grep -F 'Detected architecture riscv64' /var/log/cloudpods-riscv64-kvm-smoke.log
+grep -F 'Machine model: riscv-virtio,qemu' \
+    /var/log/cloudpods-riscv64-kvm-smoke.log
 
 kubectl --namespace onecloud get service default-web \
     -o jsonpath='{.spec.type}' | grep -qx NodePort

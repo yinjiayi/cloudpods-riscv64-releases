@@ -74,7 +74,7 @@ spec:
       serviceAccountName: onecloud-operator
       containers:
         - name: onecloud-operator
-          image: localhost/cloudpods/onecloud-operator:v4.0.3-riscv64.3
+          image: localhost/cloudpods/onecloud-operator:v4.0.3-riscv64.4
           imagePullPolicy: Never
           command:
             - /bin/onecloud-controller-manager

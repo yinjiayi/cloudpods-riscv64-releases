@@ -80,11 +80,23 @@ mysql --protocol=socket <<SQL
 CREATE USER IF NOT EXISTS 'cloudpods_root'@'10.244.%' IDENTIFIED BY '${MYSQL_PASSWORD}';
 ALTER USER 'cloudpods_root'@'10.244.%' IDENTIFIED BY '${MYSQL_PASSWORD}';
 GRANT ALL PRIVILEGES ON *.* TO 'cloudpods_root'@'10.244.%' WITH GRANT OPTION;
-CREATE USER IF NOT EXISTS 'cloudpods_root'@'${NODE_IP}' IDENTIFIED BY '${MYSQL_PASSWORD}';
-ALTER USER 'cloudpods_root'@'${NODE_IP}' IDENTIFIED BY '${MYSQL_PASSWORD}';
-GRANT ALL PRIVILEGES ON *.* TO 'cloudpods_root'@'${NODE_IP}' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 SQL
+
+# Pod egress is masqueraded to the source node InternalIP by the openRuyi
+# native nftables rules.  Grant only the Kubernetes node addresses instead of
+# opening the database account to an unrestricted wildcard host.
+mapfile -t cluster_node_ips < <(kubectl get nodes -o json | jq -r '
+  .items[].status.addresses[] | select(.type == "InternalIP") | .address' \
+  | sort -u)
+for cluster_node_ip in "${cluster_node_ips[@]}"; do
+    mysql --protocol=socket <<SQL
+CREATE USER IF NOT EXISTS 'cloudpods_root'@'${cluster_node_ip}' IDENTIFIED BY '${MYSQL_PASSWORD}';
+ALTER USER 'cloudpods_root'@'${cluster_node_ip}' IDENTIFIED BY '${MYSQL_PASSWORD}';
+GRANT ALL PRIVILEGES ON *.* TO 'cloudpods_root'@'${cluster_node_ip}' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+SQL
+done
 mysql --host "${NODE_IP}" --user cloudpods_root --password="${MYSQL_PASSWORD}" \
     --execute 'SELECT VERSION();' >/dev/null
 

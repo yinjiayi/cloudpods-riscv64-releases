@@ -1,8 +1,9 @@
 # Cloudpods RISC-V release sources
 
-Reproducible release source for running Cloudpods `v4.0.3` on openEuler
-24.03 LTS SP3 `riscv64`. The repository provides both the ocboot/self-built
-K3s delivery and an independently validated native Kubernetes delivery.
+Reproducible release source for running Cloudpods `v4.0.3` on `riscv64`.
+The repository provides the openEuler ocboot/self-built K3s delivery, the
+openEuler native Kubernetes delivery, and an openRuyi Creek native Kubernetes
+delivery.
 
 This repository publishes two classes of deliverables:
 
@@ -20,6 +21,7 @@ Customer deployment steps:
 
 - [ocboot + self-built K3s guide](docs/customer-deployment-openeuler-riscv64.md)
 - [native Kubernetes guide](docs/customer-deployment-native-k8s-openeuler-riscv64.md)
+- [openRuyi native Kubernetes guide](docs/customer-deployment-native-k8s-openruyi-riscv64.md)
 - [QEMU RVA23 validation record](docs/native-k8s-rva23-validation.md)
 
 ## Release layout
@@ -33,6 +35,7 @@ Customer deployment steps:
 | ocboot build image | `ghcr.io/yinjiayi/ocboot` |
 | openEuler RISC-V RPMs | `yinjiayi.github.io/cloudpods-riscv64-releases/rpm/openEuler/24.03-LTS-SP3/riscv64/` |
 | Native Kubernetes deployment scripts | `native-k8s/` |
+| openRuyi native Kubernetes deployment scripts | `native-k8s-openruyi/` |
 
 The complete version and provenance lock is in `versions.env`. Cloudpods OCI
 images are built in pinned `riscv64` containers on an x86_64 self-hosted runner
@@ -218,7 +221,9 @@ Before committing release-source changes, run:
 
 ```bash
 bash -n images/*.sh rpm/*.sh scripts/*.sh \
-  native-k8s/*.sh native-k8s/qemu-rva23-lab/*.sh
+  native-k8s/*.sh native-k8s/qemu-rva23-lab/*.sh \
+  native-k8s-openruyi/*.sh \
+  native-k8s-openruyi/qemu-rva23-openruyi-lab/*.sh
 git diff --check
 ```
 

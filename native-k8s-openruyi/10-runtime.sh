@@ -49,16 +49,23 @@ sed -i.bak-cloudpods-openruyi-native -E \
     '/^[^#].+[[:space:]]swap[[:space:]]/s/^/# cloudpods-openruyi-native: /' \
     /etc/fstab
 
+install -d -m 0755 /etc/modules-load.d /etc/sysctl.d /etc/sysconfig
 cat >/etc/modules-load.d/cloudpods-openruyi-native.conf <<'EOF'
 overlay
 br_netfilter
 kvm
 tun
+nf_conntrack
+nf_nat
+nft_masq
 EOF
 modprobe overlay
 modprobe br_netfilter
 modprobe tun
 modprobe kvm
+modprobe nf_conntrack
+modprobe nf_nat
+modprobe nft_masq
 
 cat >/etc/sysctl.d/99-cloudpods-openruyi-native.conf <<'EOF'
 net.ipv4.ip_forward = 1
@@ -71,6 +78,7 @@ install -d -m 0755 \
     /etc/containerd \
     /etc/containerd/conf.d \
     /etc/cni/net.d \
+    /etc/kubernetes \
     /var/lib/containerd
 containerd config default >/etc/containerd/config.toml.new
 sed -i \
@@ -89,7 +97,7 @@ cat >/etc/cni/net.d/10-cloudpods-openruyi-native.conflist <<EOF
       "type": "bridge",
       "bridge": "cni0",
       "isGateway": true,
-      "ipMasq": true,
+      "ipMasq": false,
       "hairpinMode": true,
       "ipam": {
         "type": "host-local",
@@ -103,6 +111,33 @@ cat >/etc/cni/net.d/10-cloudpods-openruyi-native.conflist <<EOF
     }
   ]
 }
+EOF
+
+install -d -m 0755 /etc/nftables
+cat >/etc/nftables/cloudpods-openruyi-native.nft <<EOF
+table ip cloudpods_openruyi_native {
+  chain postrouting {
+    type nat hook postrouting priority srcnat; policy accept;
+    ip saddr ${POD_NODE_CIDR} ip daddr != ${POD_CIDR} masquerade
+  }
+}
+EOF
+
+cat >/etc/systemd/system/cloudpods-openruyi-nftables.service <<'EOF'
+[Unit]
+Description=Cloudpods openRuyi Pod egress nftables rules
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=-/usr/sbin/nft delete table ip cloudpods_openruyi_native
+ExecStart=/usr/sbin/nft -f /etc/nftables/cloudpods-openruyi-native.nft
+ExecStop=-/usr/sbin/nft delete table ip cloudpods_openruyi_native
+
+[Install]
+WantedBy=multi-user.target
 EOF
 
 cat >/etc/systemd/system/containerd.service <<'EOF'
@@ -138,7 +173,23 @@ Requires=containerd.service
 
 [Service]
 EnvironmentFile=-/etc/sysconfig/kubelet
-ExecStart=/usr/local/bin/kubelet --config=/var/lib/kubelet/config.yaml ${KUBELET_EXTRA_ARGS}
+ExecStart=/usr/local/bin/kubelet --config=/var/lib/kubelet/config.yaml $KUBELET_EXTRA_ARGS
+Restart=always
+RestartSec=5
+StartLimitInterval=0
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat >/etc/systemd/system/kube-proxy.service <<'EOF'
+[Unit]
+Description=Kubernetes Kube Proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/kube-proxy --config=/var/lib/kube-proxy/config.conf
 Restart=always
 RestartSec=5
 StartLimitInterval=0
@@ -148,21 +199,17 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now chronyd containerd
+install -d -o chrony -g chrony -m 0750 /var/lib/chrony
+systemctl enable --now chronyd containerd cloudpods-openruyi-nftables
 
 pause_source=${GHCR_NAMESPACE}/k8s-pause:3.10.2-riscv64.1
 coredns_source=${GHCR_NAMESPACE}/k8s-coredns:1.14.2-riscv64.1
 coredns_target=registry.k8s.io/coredns/coredns:v1.14.2
-kube_proxy_source=${GHCR_NAMESPACE}/k8s-kube-proxy:v1.36.4-riscv64.1
-kube_proxy_target=registry.k8s.io/kube-proxy:v1.36.4
 
 ctr --namespace k8s.io images pull --platform linux/riscv64 "${pause_source}"
 ctr --namespace k8s.io images pull --platform linux/riscv64 "${coredns_source}"
-ctr --namespace k8s.io images pull --platform linux/riscv64 "${kube_proxy_source}"
 ctr --namespace k8s.io images tag --force \
     "${coredns_source}" "${coredns_target}" >/dev/null
-ctr --namespace k8s.io images tag --force \
-    "${kube_proxy_source}" "${kube_proxy_target}" >/dev/null
 
 systemctl is-active --quiet containerd
 ctr plugins list | awk '

@@ -32,11 +32,6 @@ jobs:
             tag: 3.10.2-riscv64.1
             asset: pause-3.10.2-linux-riscv64
             entrypoint: pause
-          - component: kube-proxy
-            image: k8s-kube-proxy
-            tag: v1.36.4-riscv64.1
-            asset: kubernetes-v1.36.4-linux-riscv64.tar.gz
-            entrypoint: kube-proxy
     steps:
       - name: Download verified release asset
         env:
@@ -54,13 +49,6 @@ jobs:
             pause)
               echo '59af553b45bd741099f058319003df2f54e2442a3497c32eb5558debc4c365c9  pause-3.10.2-linux-riscv64' | sha256sum -c -
               install -m 0755 pause-3.10.2-linux-riscv64 entrypoint
-              ;;
-            kube-proxy)
-              echo '68938df789c1f341df8d2acd8fd99cc1ff8d82a0998677f12eca4fd21b23ff62  kubernetes-v1.36.4-linux-riscv64.tar.gz' | sha256sum -c -
-              tar -xzf kubernetes-v1.36.4-linux-riscv64.tar.gz \
-                --strip-components=1 \
-                kubernetes-v1.36.4-linux-riscv64/kube-proxy
-              install -m 0755 kube-proxy entrypoint
               ;;
           esac
 
