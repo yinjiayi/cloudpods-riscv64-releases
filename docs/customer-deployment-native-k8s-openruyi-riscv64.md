@@ -123,7 +123,7 @@ chmod +x ./*.sh qemu-rva23-openruyi-lab/*.sh
 ./40-install-cloudpods.sh
 ```
 
-脚本启用 Host 时会把管理 IP 迁移到 OVS `br0`，SSH 可能短暂断开，恢复后仍使用原管理 IP 登录。
+脚本启用 Host 时会把管理 IP 迁移到 OVS `br0`，SSH 可能短暂断开，恢复后仍使用原管理 IP 登录。脚本同时针对 K3 `st_gmac` 网卡启用启动保活和 gratuitous ARP，避免驱动复位后交换机 MAC/ARP 状态过期造成管理网络失联。
 
 ## 5. 添加计算节点
 
@@ -231,9 +231,17 @@ kubectl -n onecloud get events --sort-by=.lastTimestamp
 cat /etc/cloudpods-openruyi-component-sources.env
 lsmod | grep '^kvm'
 ls -l /dev/kvm /dev/net/tun
+journalctl -b -k | grep -E 'NETDEV WATCHDOG|Reset adapter'
+systemctl status cloudpods-host-network-keepalive.timer --no-pager
 ovs-vsctl show
 ip -brief address
 resolvectl status br0
 ```
+
+若串口停留在 `A start job is running for /dev/disk/by-uuid/...`，先核对等待的 UUID
+是否与 `/boot/extlinux/extlinux.conf` 和根分区 `lsblk -f` 一致，不要直接修改 UUID
+或格式化磁盘。K3 UFS 偶发未枚举时应保存串口和 UFS 内核日志后执行物理复位；系统
+恢复后检查 `journalctl -b -k`、根文件系统状态及 `/boot` FAT，一致性修复前先完整
+备份 `/boot`。
 
 将失败脚本最后 200 行输出与上述结果一并提供给技术支持。

@@ -27,6 +27,7 @@ dnf install -y \
     chrony \
     conntrack-tools \
     curl \
+    dosfstools \
     e2fsprogs \
     ethtool \
     iproute2 \

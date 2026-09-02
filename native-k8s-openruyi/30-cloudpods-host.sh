@@ -9,6 +9,7 @@ source "${config_file}"
 
 : "${HOST_DISK_PATH:=/opt/cloud/workspace/disks}"
 : "${HOST_NETWORK_INTERFACE:?Set HOST_NETWORK_INTERFACE in ${config_file}}"
+: "${HOST_NETWORK_GATEWAY:?Set HOST_NETWORK_GATEWAY in ${config_file}}"
 : "${NODE_IP:?Set NODE_IP in ${config_file}}"
 : "${DNS_SERVERS:=}"
 qemu_version=11.0.1
@@ -165,6 +166,60 @@ EOF
 
 systemctl daemon-reload
 systemctl enable --now cloudpods-brlocal-address.service
+
+# The K3 integrated st_gmac driver can hit a NETDEV WATCHDOG timeout when the
+# physical interface is attached to OVS.  The driver resets itself, but the
+# upstream switch and gateway may retain stale forwarding/ARP state until the
+# host sends traffic again.  Disable the affected aggregation/EEE paths and
+# periodically announce the management address so a reboot remains reachable.
+cat >/usr/local/sbin/cloudpods-host-network-keepalive <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+physical_interface=${HOST_NETWORK_INTERFACE}
+node_ip=${NODE_IP}
+gateway=${HOST_NETWORK_GATEWAY}
+
+ip link show dev "\${physical_interface}" >/dev/null
+ethtool -K "\${physical_interface}" tso off gso off gro off || true
+ethtool --set-eee "\${physical_interface}" eee off || true
+
+management_interface="\${physical_interface}"
+if ip -4 address show dev br0 2>/dev/null | grep -qw "\${node_ip}"; then
+    management_interface=br0
+fi
+arping -q -c 2 -A -I "\${management_interface}" "\${node_ip}" || true
+ping -q -c 1 -W 1 "\${gateway}" >/dev/null || true
+EOF
+chmod 0755 /usr/local/sbin/cloudpods-host-network-keepalive
+
+cat >/etc/systemd/system/cloudpods-host-network-keepalive.service <<'EOF'
+[Unit]
+Description=Keep the openRuyi K3 Cloudpods management network reachable
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudpods-host-network-keepalive
+EOF
+
+cat >/etc/systemd/system/cloudpods-host-network-keepalive.timer <<'EOF'
+[Unit]
+Description=Periodically refresh the openRuyi K3 management network
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now cloudpods-host-network-keepalive.timer
+systemctl start cloudpods-host-network-keepalive.service
 
 if [[ -z ${DNS_SERVERS} ]]; then
     DNS_SERVERS=$(awk '/^nameserver / && $2 !~ /^127\./ { print $2 }' \

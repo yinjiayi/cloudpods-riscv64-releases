@@ -51,5 +51,27 @@ Cloudpods Host 将管理 IP 迁移到 OVS `br0`。脚本新增持久化 DNS 服�
 默认 DNS 路由从物理网卡迁移到 `br0`，避免 Host 启用后解析失败。节点使用网关
 `10.213.0.1` 作为 NTP；containerd 和 kubelet 在时间同步门禁通过后启动。
 
-计算节点重启验收项目：`kvm` 模块与 `/dev/kvm`、`br0` 管理地址、路由、DNS、
-Kubernetes Node Ready、Cloudpods Host online。现场访问链路恢复后补录最终结果。
+计算节点 2 首次重启后，内核记录 `spacemit-dwmac` 的 `NETDEV WATCHDOG` 发送
+队列超时并自动复位 `eth1`。系统、KVM、OVS、地址和路由均正常，但上游交换机在
+节点主动发包前无法重新学习管理 MAC。部署脚本因此关闭该接口的 TSO/GSO/GRO 和
+EEE，并用 systemd timer 每分钟发送 gratuitous ARP、探测管理网关。
+
+计算节点 2 经断电启动后，在串口未主动发送网络流量前，同网段节点即可访问其管理
+地址；启动 ID 由 `a7009ccc-a23f-42b6-85a9-08bb0deb96c5` 变为
+`626c9d42-e1ad-49a7-93de-290aa963f797`。TSO/GSO/GRO 与 EEE 保持关闭，本次启动
+日志未再次出现 `NETDEV WATCHDOG`；Kubernetes Node 为 Ready，Cloudpods Host 为
+running/online。
+
+计算节点 1 的历史日志显示 `st_gmac` 曾约每 11 秒触发一次 `NETDEV WATCHDOG`
+并复位网卡。断电后有一次 initramfs 未枚举到 UFS 根分区，停留在等待正确根 UUID
+`b134f93b-3ed4-4f31-a1c3-d10211eaa4b9`；再次物理复位后，Kingston UFS 盘在约
+10 秒内被识别，实际 `/dev/sda2` UUID 与引导配置一致，排除 `fstab` 配置错误。
+EXT4 日志恢复完成且文件系统状态为 clean。`/boot` FAT 脏位在完整备份后使用
+openRuyi `dosfstools` 修复，复查无错误；备份文件保存在计算节点 1 的
+`/root/boot-backup-before-fsck-20260902.tar`。
+
+三台节点现均启用相同规避方案，timer 执行结果为 success，当前启动周期没有新的
+`NETDEV WATCHDOG`、I/O 或 EXT4 错误。三台 Kubernetes Node 均为 Ready，三台
+Cloudpods Host 均为 running/online；计算节点 1 上的真实虚机自动恢复为 running，
+管理网可达并再次确认 `riscv64`、openRuyi、KVM、根盘与 SSH 正常。最终执行
+`60-verify.sh` 输出 `CLOUDPODS_NATIVE_K8S_ACCEPTANCE_OK`。
