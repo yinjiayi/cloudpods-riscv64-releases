@@ -23,6 +23,10 @@ if [[ ! ${NODE_NAME} =~ ^[a-z0-9][a-z0-9.-]*$ ]]; then
     exit 1
 fi
 
+containerd_bin=$(command -v containerd)
+kubelet_bin=$(command -v kubelet)
+kube_proxy_bin=$(command -v kube-proxy)
+
 [[ $(uname -m) == riscv64 ]]
 grep -q '^ID="\?openruyi"\?$' /etc/os-release
 grep -q '^VERSION_ID="\?Creek"\?$' /etc/os-release
@@ -142,7 +146,7 @@ ExecStop=-/usr/sbin/nft delete table ip cloudpods_openruyi_native
 WantedBy=multi-user.target
 EOF
 
-cat >/etc/systemd/system/containerd.service <<'EOF'
+cat >/etc/systemd/system/containerd.service <<EOF
 [Unit]
 Description=containerd container runtime
 Documentation=https://containerd.io
@@ -151,7 +155,7 @@ Requires=cloudpods-time-sync.service
 
 [Service]
 ExecStartPre=-/sbin/modprobe overlay
-ExecStart=/usr/local/bin/containerd
+ExecStart=${containerd_bin}
 Type=notify
 Delegate=yes
 KillMode=process
@@ -195,7 +199,7 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 EOF
 
-cat >/etc/systemd/system/kubelet.service <<'EOF'
+cat >/etc/systemd/system/kubelet.service <<EOF
 [Unit]
 Description=Kubernetes Kubelet
 After=containerd.service network-online.target
@@ -204,7 +208,7 @@ Requires=containerd.service
 
 [Service]
 EnvironmentFile=-/etc/sysconfig/kubelet
-ExecStart=/usr/local/bin/kubelet --config=/var/lib/kubelet/config.yaml $KUBELET_EXTRA_ARGS
+ExecStart=${kubelet_bin} --config=/var/lib/kubelet/config.yaml \$KUBELET_EXTRA_ARGS
 Restart=always
 RestartSec=5
 StartLimitInterval=0
@@ -213,14 +217,14 @@ StartLimitInterval=0
 WantedBy=multi-user.target
 EOF
 
-cat >/etc/systemd/system/kube-proxy.service <<'EOF'
+cat >/etc/systemd/system/kube-proxy.service <<EOF
 [Unit]
 Description=Kubernetes Kube Proxy
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/local/bin/kube-proxy --config=/var/lib/kube-proxy/config.conf
+ExecStart=${kube_proxy_bin} --config=/var/lib/kube-proxy/config.conf
 Restart=always
 RestartSec=5
 StartLimitInterval=0

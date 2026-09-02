@@ -10,11 +10,7 @@ source "${config_file}"
 : "${HOST_DISK_PATH:=/opt/cloud/workspace/disks}"
 : "${HOST_NETWORK_INTERFACE:?Set HOST_NETWORK_INTERFACE in ${config_file}}"
 : "${NODE_IP:?Set NODE_IP in ${config_file}}"
-: "${ARTIFACT_BASE_URL:=https://github.com/yinjiayi/cloudpods-riscv64-releases/releases/download/openruyi-native-k8s-v4.0.3-riscv64.1}"
-
-qemu_version=11.1.0
-qemu_archive=qemu-${qemu_version}-openruyi-2026.07-riscv64.tar.gz
-qemu_sha256=2fdc2afd0ede5ea4daddf8a668744817d3105e6ea810a58e7ebbb0e979c304c9
+qemu_version=11.0.1
 
 if [[ ${EUID} -ne 0 ]]; then
     echo "Run as root" >&2
@@ -49,7 +45,10 @@ dnf install -y \
     mariadb \
     nettle \
     openvswitch \
-    pixman
+    pixman \
+    qemu \
+    qemu-system \
+    qemu-tools
 
 # Remove the compatibility shim installed by early preview revisions.  The
 # published Cloudpods image discovers containerd's image filesystem directly.
@@ -59,26 +58,11 @@ if [[ -L /usr/bin/docker ]] \
     rm -f /usr/local/sbin/cloudpods-container-runtime-info
 fi
 
-qemu_prefix=/usr/local/qemu-${qemu_version}
-qemu_marker=${qemu_prefix}/.cloudpods-bundle-sha256
-if [[ ! -x ${qemu_prefix}/bin/qemu-system-riscv64 ]] \
-    || [[ ! -s ${qemu_marker} ]] \
-    || [[ $(<"${qemu_marker}") != "${qemu_sha256}" ]]; then
-    work_dir=$(mktemp -d)
-    cleanup() {
-        rm -rf "${work_dir}"
-    }
-    trap cleanup EXIT
-    curl --fail --location --retry 5 \
-        --output "${work_dir}/${qemu_archive}" \
-        "${ARTIFACT_BASE_URL}/${qemu_archive}"
-    printf '%s  %s\n' "${qemu_sha256}" "${work_dir}/${qemu_archive}" \
-        | sha256sum --check
-    tar -xzf "${work_dir}/${qemu_archive}" -C /usr/local
-    printf '%s\n' "${qemu_sha256}" >"${qemu_marker}"
-    cleanup
-    trap - EXIT
-fi
+qemu_bin=$(command -v qemu-system-riscv64)
+qemu_img_bin=$(command -v qemu-img)
+qemu_nbd_bin=$(command -v qemu-nbd)
+rpm -q qemu qemu-system qemu-tools
+rpm -qf "${qemu_bin}" "${qemu_img_bin}" "${qemu_nbd_bin}"
 
 # mysql/openvswitch dependencies can install SELinux policy after
 # 10-runtime.sh has already run.  Keep the supported permissive setting both
@@ -106,8 +90,8 @@ networks:
 local_image_path:
 - ${HOST_DISK_PATH}
 EOF
-cat >/etc/yunion/host_local.conf <<'EOF'
-default_qemu_version: 11.1.0
+cat >/etc/yunion/host_local.conf <<EOF
+default_qemu_version: ${qemu_version}
 EOF
 
 # The Cloudpods local-only OVS bridge must keep an IPv4 link-local address.
@@ -158,10 +142,15 @@ for _ in {1..30}; do
 done
 
 test -S /var/run/onecloud/exec.sock
-qemu_bin=${qemu_prefix}/bin/qemu-system-riscv64
 test -x "${qemu_bin}"
-"${qemu_bin}" --version | grep -F 'version 11.1.0'
-ldd "${qemu_bin}" | grep -F 'libnettle.so'
+"${qemu_bin}" --version | grep -F "version ${qemu_version}"
+ldd "${qemu_bin}" | grep -Eq 'lib(gnutls|nettle)\.so'
+
+sed -i '/^QEMU_/d' /etc/cloudpods-openruyi-component-sources.env
+cat >>/etc/cloudpods-openruyi-component-sources.env <<EOF
+QEMU_SOURCE=openruyi-rpm
+QEMU_VERSION=${qemu_version}
+EOF
 
 # Cloudpods configures a password-protected VNC endpoint for every guest.  A
 # timeout proves that QEMU stayed alive instead of rejecting the DES-RFB

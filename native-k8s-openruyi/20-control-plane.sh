@@ -17,6 +17,12 @@ source "${config_file}"
 [[ ${EUID} -eq 0 ]]
 ip -4 address show | grep -Fq "${NODE_IP}/"
 
+kubernetes_version=$(kubeadm version -o short)
+etcd_bin=$(command -v etcd)
+kube_apiserver_bin=$(command -v kube-apiserver)
+kube_controller_manager_bin=$(command -v kube-controller-manager)
+kube_scheduler_bin=$(command -v kube-scheduler)
+
 bootstrap_dir=/opt/cloudpods-openruyi-native-k8s
 kubeadm_config=${bootstrap_dir}/kubeadm.yaml
 kubeconfig=/etc/kubernetes/admin.conf
@@ -43,7 +49,7 @@ nodeRegistration:
 apiVersion: kubeadm.k8s.io/v1beta4
 kind: ClusterConfiguration
 clusterName: ${CLUSTER_NAME}
-kubernetesVersion: v1.36.4
+kubernetesVersion: ${kubernetes_version}
 controlPlaneEndpoint: ${NODE_IP}:6443
 certificatesDir: /etc/kubernetes/pki
 imageRepository: registry.k8s.io
@@ -136,7 +142,7 @@ Wants=network-online.target
 [Service]
 Type=notify
 Environment=ETCD_UNSUPPORTED_ARCH=riscv64
-ExecStart=/usr/local/bin/etcd --name=${NODE_NAME} --data-dir=/var/lib/etcd --listen-client-urls=https://127.0.0.1:2379,https://${NODE_IP}:2379 --advertise-client-urls=https://${NODE_IP}:2379 --listen-peer-urls=https://${NODE_IP}:2380 --initial-advertise-peer-urls=https://${NODE_IP}:2380 --initial-cluster=${NODE_NAME}=https://${NODE_IP}:2380 --initial-cluster-state=new --client-cert-auth=true --trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt --cert-file=/etc/kubernetes/pki/etcd/server.crt --key-file=/etc/kubernetes/pki/etcd/server.key --peer-client-cert-auth=true --peer-trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt --peer-cert-file=/etc/kubernetes/pki/etcd/peer.crt --peer-key-file=/etc/kubernetes/pki/etcd/peer.key
+ExecStart=${etcd_bin} --name=${NODE_NAME} --data-dir=/var/lib/etcd --listen-client-urls=https://127.0.0.1:2379,https://${NODE_IP}:2379 --advertise-client-urls=https://${NODE_IP}:2379 --listen-peer-urls=https://${NODE_IP}:2380 --initial-advertise-peer-urls=https://${NODE_IP}:2380 --initial-cluster=${NODE_NAME}=https://${NODE_IP}:2380 --initial-cluster-state=new --client-cert-auth=true --trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt --cert-file=/etc/kubernetes/pki/etcd/server.crt --key-file=/etc/kubernetes/pki/etcd/server.key --peer-client-cert-auth=true --peer-trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt --peer-cert-file=/etc/kubernetes/pki/etcd/peer.crt --peer-key-file=/etc/kubernetes/pki/etcd/peer.key
 Restart=always
 RestartSec=5
 
@@ -151,7 +157,7 @@ After=etcd.service network-online.target
 Requires=etcd.service
 
 [Service]
-ExecStart=/usr/local/bin/kube-apiserver --advertise-address=${NODE_IP} --bind-address=0.0.0.0 --secure-port=6443 --allow-privileged=true --authorization-mode=Node,RBAC --enable-admission-plugins=NodeRestriction --enable-bootstrap-token-auth=true --etcd-servers=https://127.0.0.1:2379 --etcd-cafile=/etc/kubernetes/pki/etcd/ca.crt --etcd-certfile=/etc/kubernetes/pki/apiserver-etcd-client.crt --etcd-keyfile=/etc/kubernetes/pki/apiserver-etcd-client.key --client-ca-file=/etc/kubernetes/pki/ca.crt --tls-cert-file=/etc/kubernetes/pki/apiserver.crt --tls-private-key-file=/etc/kubernetes/pki/apiserver.key --kubelet-client-certificate=/etc/kubernetes/pki/apiserver-kubelet-client.crt --kubelet-client-key=/etc/kubernetes/pki/apiserver-kubelet-client.key --kubelet-preferred-address-types=InternalIP,Hostname,ExternalIP --service-cluster-ip-range=${SERVICE_CIDR} --service-node-port-range=30000-32767 --service-account-issuer=https://kubernetes.default.svc.cluster.local --service-account-key-file=/etc/kubernetes/pki/sa.pub --service-account-signing-key-file=/etc/kubernetes/pki/sa.key --requestheader-client-ca-file=/etc/kubernetes/pki/front-proxy-ca.crt --requestheader-allowed-names=front-proxy-client --requestheader-extra-headers-prefix=X-Remote-Extra- --requestheader-group-headers=X-Remote-Group --requestheader-username-headers=X-Remote-User --proxy-client-cert-file=/etc/kubernetes/pki/front-proxy-client.crt --proxy-client-key-file=/etc/kubernetes/pki/front-proxy-client.key
+ExecStart=${kube_apiserver_bin} --advertise-address=${NODE_IP} --bind-address=0.0.0.0 --secure-port=6443 --allow-privileged=true --authorization-mode=Node,RBAC --enable-admission-plugins=NodeRestriction --enable-bootstrap-token-auth=true --etcd-servers=https://127.0.0.1:2379 --etcd-cafile=/etc/kubernetes/pki/etcd/ca.crt --etcd-certfile=/etc/kubernetes/pki/apiserver-etcd-client.crt --etcd-keyfile=/etc/kubernetes/pki/apiserver-etcd-client.key --client-ca-file=/etc/kubernetes/pki/ca.crt --tls-cert-file=/etc/kubernetes/pki/apiserver.crt --tls-private-key-file=/etc/kubernetes/pki/apiserver.key --kubelet-client-certificate=/etc/kubernetes/pki/apiserver-kubelet-client.crt --kubelet-client-key=/etc/kubernetes/pki/apiserver-kubelet-client.key --kubelet-preferred-address-types=InternalIP,Hostname,ExternalIP --service-cluster-ip-range=${SERVICE_CIDR} --service-node-port-range=30000-32767 --service-account-issuer=https://kubernetes.default.svc.cluster.local --service-account-key-file=/etc/kubernetes/pki/sa.pub --service-account-signing-key-file=/etc/kubernetes/pki/sa.key --requestheader-client-ca-file=/etc/kubernetes/pki/front-proxy-ca.crt --requestheader-allowed-names=front-proxy-client --requestheader-extra-headers-prefix=X-Remote-Extra- --requestheader-group-headers=X-Remote-Group --requestheader-username-headers=X-Remote-User --proxy-client-cert-file=/etc/kubernetes/pki/front-proxy-client.crt --proxy-client-key-file=/etc/kubernetes/pki/front-proxy-client.key
 Restart=always
 RestartSec=5
 
@@ -166,7 +172,7 @@ After=kube-apiserver.service
 Requires=kube-apiserver.service
 
 [Service]
-ExecStart=/usr/local/bin/kube-controller-manager --bind-address=127.0.0.1 --kubeconfig=/etc/kubernetes/controller-manager.conf --authentication-kubeconfig=/etc/kubernetes/controller-manager.conf --authorization-kubeconfig=/etc/kubernetes/controller-manager.conf --client-ca-file=/etc/kubernetes/pki/ca.crt --cluster-name=${CLUSTER_NAME} --cluster-cidr=${POD_CIDR} --allocate-node-cidrs=true --node-cidr-mask-size=24 --cluster-signing-cert-file=/etc/kubernetes/pki/ca.crt --cluster-signing-key-file=/etc/kubernetes/pki/ca.key --controllers=*,bootstrap-signer-controller,token-cleaner-controller --root-ca-file=/etc/kubernetes/pki/ca.crt --service-account-private-key-file=/etc/kubernetes/pki/sa.key --service-cluster-ip-range=${SERVICE_CIDR} --use-service-account-credentials=true --leader-elect=true
+ExecStart=${kube_controller_manager_bin} --bind-address=127.0.0.1 --kubeconfig=/etc/kubernetes/controller-manager.conf --authentication-kubeconfig=/etc/kubernetes/controller-manager.conf --authorization-kubeconfig=/etc/kubernetes/controller-manager.conf --client-ca-file=/etc/kubernetes/pki/ca.crt --cluster-name=${CLUSTER_NAME} --cluster-cidr=${POD_CIDR} --allocate-node-cidrs=true --node-cidr-mask-size=24 --cluster-signing-cert-file=/etc/kubernetes/pki/ca.crt --cluster-signing-key-file=/etc/kubernetes/pki/ca.key --controllers=*,bootstrap-signer-controller,token-cleaner-controller --root-ca-file=/etc/kubernetes/pki/ca.crt --service-account-private-key-file=/etc/kubernetes/pki/sa.key --service-cluster-ip-range=${SERVICE_CIDR} --use-service-account-credentials=true --leader-elect=true
 Restart=always
 RestartSec=5
 
@@ -174,14 +180,14 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-cat >/etc/systemd/system/kube-scheduler.service <<'EOF'
+cat >/etc/systemd/system/kube-scheduler.service <<EOF
 [Unit]
 Description=Kubernetes Scheduler
 After=kube-apiserver.service
 Requires=kube-apiserver.service
 
 [Service]
-ExecStart=/usr/local/bin/kube-scheduler --bind-address=127.0.0.1 --kubeconfig=/etc/kubernetes/scheduler.conf --authentication-kubeconfig=/etc/kubernetes/scheduler.conf --authorization-kubeconfig=/etc/kubernetes/scheduler.conf --leader-elect=true
+ExecStart=${kube_scheduler_bin} --bind-address=127.0.0.1 --kubeconfig=/etc/kubernetes/scheduler.conf --authentication-kubeconfig=/etc/kubernetes/scheduler.conf --authorization-kubeconfig=/etc/kubernetes/scheduler.conf --leader-elect=true
 Restart=always
 RestartSec=5
 

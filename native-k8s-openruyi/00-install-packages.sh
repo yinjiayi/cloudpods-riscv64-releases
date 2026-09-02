@@ -27,6 +27,7 @@ dnf install -y \
     chrony \
     conntrack-tools \
     curl \
+    e2fsprogs \
     ethtool \
     iproute2 \
     iptables-nft \
@@ -45,6 +46,29 @@ dnf install -y \
     wget \
     xz
 
+repo_has_package() {
+    dnf -q repoquery --location "$1" 2>/dev/null \
+        | awk '/^https?:\/\// { found = 1 } END { exit !found }'
+}
+
+kubernetes_source=upstream
+if repo_has_package kubernetes; then
+    dnf install -y kubernetes
+    kubernetes_source=openruyi-rpm
+fi
+
+containerd_source=upstream
+if repo_has_package containerd; then
+    dnf install -y containerd
+    containerd_source=openruyi-rpm
+fi
+
+etcd_source=upstream
+if repo_has_package etcd; then
+    dnf install -y etcd
+    etcd_source=openruyi-rpm
+fi
+
 work_dir=$(mktemp -d)
 cleanup() {
     rm -rf "${work_dir}"
@@ -59,32 +83,38 @@ download_and_check() {
     printf '%s  %s\n' "${sha256}" "${work_dir}/${output}" | sha256sum --check
 }
 
-kubernetes_archive=kubernetes-${kubernetes_version}-linux-riscv64.tar.gz
-download_and_check \
-    "${ARTIFACT_BASE_URL}/${kubernetes_archive}" \
-    "${kubernetes_archive}" \
-    68938df789c1f341df8d2acd8fd99cc1ff8d82a0998677f12eca4fd21b23ff62
-tar -xzf "${work_dir}/${kubernetes_archive}" -C "${work_dir}"
-install -m 0755 \
-    "${work_dir}/kubernetes-${kubernetes_version}-linux-riscv64/"* \
-    /usr/local/bin/
+if [[ ${kubernetes_source} == upstream ]]; then
+    kubernetes_archive=kubernetes-${kubernetes_version}-linux-riscv64.tar.gz
+    download_and_check \
+        "${ARTIFACT_BASE_URL}/${kubernetes_archive}" \
+        "${kubernetes_archive}" \
+        68938df789c1f341df8d2acd8fd99cc1ff8d82a0998677f12eca4fd21b23ff62
+    tar -xzf "${work_dir}/${kubernetes_archive}" -C "${work_dir}"
+    install -m 0755 \
+        "${work_dir}/kubernetes-${kubernetes_version}-linux-riscv64/"* \
+        /usr/local/bin/
+fi
 
-etcd_archive=etcd-${etcd_version}-linux-riscv64.tar.gz
-download_and_check \
-    "${ARTIFACT_BASE_URL}/${etcd_archive}" \
-    "${etcd_archive}" \
-    58240fb5926bbe0f9e2f65706104ee50362dd38cf7f6964d330f3165b4c9725f
-tar -xzf "${work_dir}/${etcd_archive}" -C "${work_dir}"
-install -m 0755 \
-    "${work_dir}/etcd-${etcd_version}-linux-riscv64/"* \
-    /usr/local/bin/
+if [[ ${etcd_source} == upstream ]]; then
+    etcd_archive=etcd-${etcd_version}-linux-riscv64.tar.gz
+    download_and_check \
+        "${ARTIFACT_BASE_URL}/${etcd_archive}" \
+        "${etcd_archive}" \
+        58240fb5926bbe0f9e2f65706104ee50362dd38cf7f6964d330f3165b4c9725f
+    tar -xzf "${work_dir}/${etcd_archive}" -C "${work_dir}"
+    install -m 0755 \
+        "${work_dir}/etcd-${etcd_version}-linux-riscv64/"* \
+        /usr/local/bin/
+fi
 
-containerd_archive=containerd-${containerd_version}-linux-riscv64.tar.gz
-download_and_check \
-    "https://github.com/containerd/containerd/releases/download/v${containerd_version}/${containerd_archive}" \
-    "${containerd_archive}" \
-    18e3ec3d2b79cbc5fdf8df04e1e25d0e64949958e8f213dd80692c9f38eba492
-tar -xzf "${work_dir}/${containerd_archive}" -C /usr/local
+if [[ ${containerd_source} == upstream ]]; then
+    containerd_archive=containerd-${containerd_version}-linux-riscv64.tar.gz
+    download_and_check \
+        "https://github.com/containerd/containerd/releases/download/v${containerd_version}/${containerd_archive}" \
+        "${containerd_archive}" \
+        18e3ec3d2b79cbc5fdf8df04e1e25d0e64949958e8f213dd80692c9f38eba492
+    tar -xzf "${work_dir}/${containerd_archive}" -C /usr/local
+fi
 
 crictl_archive=crictl-${crictl_version}-linux-riscv64.tar.gz
 download_and_check \
@@ -108,9 +138,30 @@ for command_name in \
     command -v "${command_name}" >/dev/null
 done
 
-kubelet --version | grep -F "Kubernetes ${kubernetes_version}"
-containerd --version | grep -F "v${containerd_version}"
-ETCD_UNSUPPORTED_ARCH=riscv64 etcd --version \
-    | grep -F "etcd Version: ${etcd_version#v}"
+cat >/etc/cloudpods-openruyi-component-sources.env <<EOF
+KUBERNETES_SOURCE=${kubernetes_source}
+CONTAINERD_SOURCE=${containerd_source}
+ETCD_SOURCE=${etcd_source}
+CRICTL_SOURCE=upstream
+CNI_SOURCE=upstream
+EOF
+
+if [[ ${kubernetes_source} == openruyi-rpm ]]; then
+    rpm -q kubernetes
+    rpm -qf "$(command -v kubelet)"
+fi
+if [[ ${containerd_source} == openruyi-rpm ]]; then
+    rpm -q containerd
+    rpm -qf "$(command -v containerd)"
+fi
+if [[ ${etcd_source} == openruyi-rpm ]]; then
+    rpm -q etcd
+    rpm -qf "$(command -v etcd)"
+fi
+
+kubelet --version | grep -E '^Kubernetes v[0-9]+\.[0-9]+\.[0-9]+'
+containerd --version | grep -E '^containerd .* v[0-9]+\.[0-9]+\.[0-9]+'
+ETCD_UNSUPPORTED_ARCH=riscv64 etcd --version | grep -E '^etcd Version: [0-9]+\.[0-9]+\.[0-9]+'
 crictl --version | grep -F "crictl version ${crictl_version}"
+cat /etc/cloudpods-openruyi-component-sources.env
 echo OPENRUYI_NATIVE_K8S_PACKAGES_OK
