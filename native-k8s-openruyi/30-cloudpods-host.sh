@@ -9,12 +9,10 @@ source "${config_file}"
 
 : "${HOST_DISK_PATH:=/opt/cloud/workspace/disks}"
 : "${HOST_NETWORK_INTERFACE:?Set HOST_NETWORK_INTERFACE in ${config_file}}"
+: "${HOST_NETWORK_GATEWAY:?Set HOST_NETWORK_GATEWAY in ${config_file}}"
 : "${NODE_IP:?Set NODE_IP in ${config_file}}"
-: "${ARTIFACT_BASE_URL:=https://github.com/yinjiayi/cloudpods-riscv64-releases/releases/download/openruyi-native-k8s-v4.0.3-riscv64.1}"
-
-qemu_version=11.1.0
-qemu_archive=qemu-${qemu_version}-openruyi-2026.07-riscv64.tar.gz
-qemu_sha256=2fdc2afd0ede5ea4daddf8a668744817d3105e6ea810a58e7ebbb0e979c304c9
+: "${DNS_SERVERS:=}"
+qemu_version=11.0.1
 
 if [[ ${EUID} -ne 0 ]]; then
     echo "Run as root" >&2
@@ -41,6 +39,8 @@ curl -fsSL \
 dnf install -y \
     cloudpods-executor \
     cloudpods-riscv-firmware \
+    cyrus-sasl \
+    dtc \
     glib \
     libaio \
     libcap-ng \
@@ -48,8 +48,14 @@ dnf install -y \
     liburing \
     mariadb \
     nettle \
+    numactl \
     openvswitch \
-    pixman
+    pixman \
+    qemu \
+    qemu-system \
+    qemu-tools \
+    snappy \
+    lzo
 
 # Remove the compatibility shim installed by early preview revisions.  The
 # published Cloudpods image discovers containerd's image filesystem directly.
@@ -59,26 +65,37 @@ if [[ -L /usr/bin/docker ]] \
     rm -f /usr/local/sbin/cloudpods-container-runtime-info
 fi
 
+qemu_bin=$(command -v qemu-system-riscv64)
+qemu_img_bin=$(command -v qemu-img)
+qemu_nbd_bin=$(command -v qemu-nbd)
+rpm -q qemu qemu-system qemu-tools
+rpm -qf "${qemu_bin}" "${qemu_img_bin}" "${qemu_nbd_bin}"
+
+# Cloudpods resolves a requested QEMU version from a versioned prefix.  Keep
+# the files owned by openRuyi and expose only symlinks from that prefix.  This
+# also wins over the older compatibility QEMU pulled by cloudpods-executor.
 qemu_prefix=/usr/local/qemu-${qemu_version}
-qemu_marker=${qemu_prefix}/.cloudpods-bundle-sha256
-if [[ ! -x ${qemu_prefix}/bin/qemu-system-riscv64 ]] \
-    || [[ ! -s ${qemu_marker} ]] \
-    || [[ $(<"${qemu_marker}") != "${qemu_sha256}" ]]; then
-    work_dir=$(mktemp -d)
-    cleanup() {
-        rm -rf "${work_dir}"
-    }
-    trap cleanup EXIT
-    curl --fail --location --retry 5 \
-        --output "${work_dir}/${qemu_archive}" \
-        "${ARTIFACT_BASE_URL}/${qemu_archive}"
-    printf '%s  %s\n' "${qemu_sha256}" "${work_dir}/${qemu_archive}" \
-        | sha256sum --check
-    tar -xzf "${work_dir}/${qemu_archive}" -C /usr/local
-    printf '%s\n' "${qemu_sha256}" >"${qemu_marker}"
-    cleanup
-    trap - EXIT
+install -d -m 0755 "${qemu_prefix}/bin"
+ln -sfn "${qemu_bin}" "${qemu_prefix}/bin/qemu-system-riscv64"
+ln -sfn "${qemu_img_bin}" "${qemu_prefix}/bin/qemu-img"
+ln -sfn "${qemu_nbd_bin}" "${qemu_prefix}/bin/qemu-nbd"
+qemu_bin=${qemu_prefix}/bin/qemu-system-riscv64
+
+qemu_firmware_source=openruyi-rpm
+if [[ ! -s /usr/share/qemu/efi-virtio.rom ]]; then
+    fallback_rom=$(rpm -ql qemu-riscv-cloudpods 2>/dev/null \
+        | grep '/share/qemu/efi-virtio\.rom$' | head -n 1 || true)
+    if [[ ! -s ${fallback_rom} ]]; then
+        echo "openRuyi QEMU is missing efi-virtio.rom and no fallback ROM is installed" >&2
+        exit 1
+    fi
+    install -d -m 0755 /usr/share/qemu
+    for rom in "$(dirname -- "${fallback_rom}")"/*.rom; do
+        ln -sfn "${rom}" "/usr/share/qemu/$(basename -- "${rom}")"
+    done
+    qemu_firmware_source=cloudpods-fallback-rpm
 fi
+test -s /usr/share/qemu/efi-virtio.rom
 
 # mysql/openvswitch dependencies can install SELinux policy after
 # 10-runtime.sh has already run.  Keep the supported permissive setting both
@@ -106,8 +123,8 @@ networks:
 local_image_path:
 - ${HOST_DISK_PATH}
 EOF
-cat >/etc/yunion/host_local.conf <<'EOF'
-default_qemu_version: 11.1.0
+cat >/etc/yunion/host_local.conf <<EOF
+default_qemu_version: ${qemu_version}
 EOF
 
 # The Cloudpods local-only OVS bridge must keep an IPv4 link-local address.
@@ -149,6 +166,102 @@ EOF
 
 systemctl daemon-reload
 systemctl enable --now cloudpods-brlocal-address.service
+
+# The K3 integrated st_gmac driver can hit a NETDEV WATCHDOG timeout when the
+# physical interface is attached to OVS.  The driver resets itself, but the
+# upstream switch and gateway may retain stale forwarding/ARP state until the
+# host sends traffic again.  Disable the affected aggregation/EEE paths and
+# periodically announce the management address so a reboot remains reachable.
+cat >/usr/local/sbin/cloudpods-host-network-keepalive <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+physical_interface=${HOST_NETWORK_INTERFACE}
+node_ip=${NODE_IP}
+gateway=${HOST_NETWORK_GATEWAY}
+
+ip link show dev "\${physical_interface}" >/dev/null
+ethtool -K "\${physical_interface}" tso off gso off gro off || true
+ethtool --set-eee "\${physical_interface}" eee off || true
+
+management_interface="\${physical_interface}"
+if ip -4 address show dev br0 2>/dev/null | grep -qw "\${node_ip}"; then
+    management_interface=br0
+fi
+arping -q -c 2 -A -I "\${management_interface}" "\${node_ip}" || true
+ping -q -c 1 -W 1 "\${gateway}" >/dev/null || true
+EOF
+chmod 0755 /usr/local/sbin/cloudpods-host-network-keepalive
+
+cat >/etc/systemd/system/cloudpods-host-network-keepalive.service <<'EOF'
+[Unit]
+Description=Keep the openRuyi K3 Cloudpods management network reachable
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudpods-host-network-keepalive
+EOF
+
+cat >/etc/systemd/system/cloudpods-host-network-keepalive.timer <<'EOF'
+[Unit]
+Description=Periodically refresh the openRuyi K3 management network
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now cloudpods-host-network-keepalive.timer
+systemctl start cloudpods-host-network-keepalive.service
+
+if [[ -z ${DNS_SERVERS} ]]; then
+    DNS_SERVERS=$(awk '/^nameserver / && $2 !~ /^127\./ { print $2 }' \
+        /run/systemd/resolve/resolv.conf /etc/resolv.conf 2>/dev/null \
+        | sort -u | xargs)
+fi
+if [[ -n ${DNS_SERVERS} ]] && command -v resolvectl >/dev/null; then
+    printf '%s\n' ${DNS_SERVERS} >/etc/cloudpods-openruyi-dns-servers
+    chmod 0644 /etc/cloudpods-openruyi-dns-servers
+    cat >/usr/local/sbin/cloudpods-br0-dns <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+for _ in {1..120}; do
+    ip link show dev br0 >/dev/null 2>&1 && break
+    sleep 1
+done
+ip link show dev br0 >/dev/null
+mapfile -t dns_servers </etc/cloudpods-openruyi-dns-servers
+resolvectl dns br0 "\${dns_servers[@]}"
+resolvectl default-route br0 yes
+resolvectl default-route ${HOST_NETWORK_INTERFACE} no || true
+resolvectl flush-caches
+EOF
+    chmod 0755 /usr/local/sbin/cloudpods-br0-dns
+    cat >/etc/systemd/system/cloudpods-br0-dns.service <<'EOF'
+[Unit]
+Description=Move DNS routing to the Cloudpods br0 management bridge
+After=network-online.target systemd-resolved.service
+Wants=network-online.target systemd-resolved.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudpods-br0-dns
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    systemctl daemon-reload
+    systemctl enable --now cloudpods-br0-dns.service
+fi
+
 systemctl enable cloudpods-executor
 systemctl restart cloudpods-executor
 
@@ -158,10 +271,16 @@ for _ in {1..30}; do
 done
 
 test -S /var/run/onecloud/exec.sock
-qemu_bin=${qemu_prefix}/bin/qemu-system-riscv64
 test -x "${qemu_bin}"
-"${qemu_bin}" --version | grep -F 'version 11.1.0'
-ldd "${qemu_bin}" | grep -F 'libnettle.so'
+"${qemu_bin}" --version | grep -F "version ${qemu_version}"
+ldd "${qemu_bin}" | grep -Eq 'lib(gnutls|nettle)\.so'
+
+sed -i '/^QEMU_/d' /etc/cloudpods-openruyi-component-sources.env
+cat >>/etc/cloudpods-openruyi-component-sources.env <<EOF
+QEMU_SOURCE=openruyi-rpm
+QEMU_VERSION=${qemu_version}
+QEMU_FIRMWARE_SOURCE=${qemu_firmware_source}
+EOF
 
 # Cloudpods configures a password-protected VNC endpoint for every guest.  A
 # timeout proves that QEMU stayed alive instead of rejecting the DES-RFB

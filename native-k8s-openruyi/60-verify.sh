@@ -73,7 +73,10 @@ test "${bad_daemonsets}" -eq 0
 
 test -S /var/run/onecloud/exec.sock
 test -c /dev/kvm
-/usr/local/qemu-11.1.0/bin/qemu-system-riscv64 --version | grep -F 'version 11.1.0'
+qemu_bin=$(command -v qemu-system-riscv64)
+rpm -q qemu-system qemu-tools
+rpm -qf "${qemu_bin}"
+"${qemu_bin}" --version | grep -F 'version 11.0.1'
 grep -F 'Linux version' /var/log/cloudpods-riscv64-kvm-smoke.log
 grep -F 'Machine model: riscv-virtio,qemu' \
     /var/log/cloudpods-riscv64-kvm-smoke.log

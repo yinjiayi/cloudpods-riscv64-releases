@@ -14,9 +14,10 @@ This repository publishes two classes of deliverables:
 K3s itself is built from the `yinjiayi/k3s` fork. ocboot consumes the K3s
 release assets, the GHCR image names, and the RPM repository from the
 `yinjiayi/ocboot` RISC-V branch. The openEuler native path installs Kubernetes
-1.29.1 packages first. The openRuyi native path installs the pinned upstream
-Kubernetes 1.36.4 RISC-V binaries first. Both paths deploy Cloudpods only after
-the Kubernetes acceptance gate has passed.
+1.29.1 packages first. The openRuyi native path prefers the Kubernetes,
+containerd, etcd and QEMU RPMs in the openRuyi repository, and uses
+checksum-pinned official RISC-V artifacts only when a package is absent. Both
+paths deploy Cloudpods only after the Kubernetes acceptance gate has passed.
 
 Customer deployment steps:
 
@@ -24,7 +25,8 @@ Customer deployment steps:
 - [native Kubernetes guide](docs/customer-deployment-native-k8s-openeuler-riscv64.md)
 - [openRuyi native Kubernetes guide](docs/customer-deployment-native-k8s-openruyi-riscv64.md)
 - [QEMU RVA23 validation record](docs/native-k8s-rva23-validation.md)
-- [openRuyi native Kubernetes validation record](docs/validation-openruyi-native-k8s-20260826.md)
+- [openRuyi 2026.08 physical-cluster validation record](docs/validation-openruyi-native-k8s-20260902.md)
+- [openRuyi QEMU-lab validation record](docs/validation-openruyi-native-k8s-20260826.md)
 - [openRuyi upstream adaptation changes](docs/openruyi-upstream-changes.md)
 
 ## Release layout
@@ -79,11 +81,13 @@ The native RPM and KVM-validation runner must provide:
   and Ninja
 - at least 16 GiB RAM and 60 GiB free disk
 
-The openRuyi QEMU publisher is a native `riscv64` openRuyi Creek 2026.07
-machine with `/dev/kvm`. It builds QEMU 11.1.0 from the checksum-pinned upstream source,
-enables KVM, slirp and Nettle, and rejects the bundle unless a
+The fallback openRuyi QEMU publisher is a native `riscv64` openRuyi Creek
+machine with `/dev/kvm`. It builds QEMU 11.1.0 from the checksum-pinned upstream
+source, enables KVM, slirp and Nettle, and rejects the bundle unless a
 password-protected VNC endpoint remains alive. This validates the DES-RFB
-crypto backend required by Cloudpods before the bundle is published.
+crypto backend required by Cloudpods before the bundle is published. On
+openRuyi Creek 2026.08, the deployment instead uses the distribution QEMU
+11.0.1 RPM and adds only the missing VirtIO option ROM from the fallback RPM.
 
 GitHub does not publish a native RISC-V Actions Runner. On a dedicated build
 machine, install the pinned official x64 Runner control process with:

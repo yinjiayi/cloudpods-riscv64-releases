@@ -8,8 +8,8 @@ permissions:
   packages: write
 
 env:
-  CLOUDPODS_COMMIT: 6d7460e50f1d529d85d9e31f2bef456429d4e5ee
-  CLOUDPODS_VERSION: v4.0.3-riscv64.8
+  CLOUDPODS_COMMIT: 6359b60d0b5cad7d337990ba966c7e2d106cabb8
+  CLOUDPODS_VERSION: v4.0.3-riscv64.9
 
 jobs:
   build:
