@@ -25,7 +25,7 @@
 | Dashboard | v4.0.3-riscv64-ui2 | GHCR |
 | Cloudpods Operator | v4.0.3-riscv64.4 | GHCR |
 
-交付源码标签：`openruyi-native-k8s-v4.0.3-riscv64.3`。
+交付源码标签：`openruyi-native-k8s-v4.0.3-riscv64.4`。
 
 ## 2. 部署规划
 
@@ -74,7 +74,7 @@ df -h /
 ```bash
 dnf install -y git openssl
 cd /root
-git clone --depth 1 --branch openruyi-native-k8s-v4.0.3-riscv64.3 \
+git clone --depth 1 --branch openruyi-native-k8s-v4.0.3-riscv64.4 \
   https://github.com/yinjiayi/cloudpods-riscv64-releases.git
 cd cloudpods-riscv64-releases
 cp native-k8s-openruyi/install.env.example \
@@ -203,7 +203,7 @@ cd /root/cloudpods-riscv64-releases/native-k8s-openruyi
 ./60-verify.sh
 ```
 
-必须输出 `CLOUDPODS_NATIVE_K8S_ACCEPTANCE_OK`，三台节点均为 `Ready/riscv64`，三台 Cloudpods Host 均为在线且启用。浏览器访问 `https://10.213.6.187/`，账号为 `admin`，密码是配置文件中的 `ADMIN_PASSWORD`。
+必须输出 `CLOUDPODS_NATIVE_K8S_ACCEPTANCE_OK`，三台节点均为 `Ready/riscv64`，三台 Cloudpods Host 均为在线且启用。浏览器访问 `https://10.213.6.187/`，账号为 `sysadmin`，密码是配置文件中的 `ADMIN_PASSWORD`；项目为 `system`，域为 `Default`。
 
 最后创建一台真实 RISC-V 虚机并完成以下验收：
 

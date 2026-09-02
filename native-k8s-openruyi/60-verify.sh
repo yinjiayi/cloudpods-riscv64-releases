@@ -8,6 +8,7 @@ test -s "${config_file}"
 source "${config_file}"
 
 : "${NODE_IP:?}"
+: "${ADMIN_PASSWORD:?}"
 
 export KUBECONFIG=/etc/kubernetes/admin.conf
 systemctl is-active --quiet chronyd cloudpods-time-sync
@@ -94,4 +95,8 @@ kubectl --namespace onecloud exec deployment/default-climc -- climc host-list
 kubectl --namespace onecloud exec deployment/default-climc -- \
     climc host-list --enabled --access-ip "${NODE_IP}" --field id --limit 1 \
     | grep -Eq '[0-9a-f]{8}-[0-9a-f-]{27}'
+kubectl --namespace onecloud exec deployment/default-climc -- \
+    climc --os-username sysadmin --os-password "${ADMIN_PASSWORD}" \
+    --os-project-name system --os-project-domain Default \
+    --os-domain-name Default user-show sysadmin >/dev/null
 echo CLOUDPODS_NATIVE_K8S_ACCEPTANCE_OK
