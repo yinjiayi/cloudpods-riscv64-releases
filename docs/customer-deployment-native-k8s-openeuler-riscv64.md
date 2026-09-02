@@ -184,7 +184,7 @@ cd /root/cloudpods-riscv64-releases/native-k8s
 ./60-verify.sh
 ```
 
-安装脚本应先输出 `CLOUDPODS_INSTALL_OK`。随后运行验收脚本；多节点时脚本会在每个节点各启动一个临时 Pod，完成 Pod IP 全互通测试并自动删除，最后必须输出 `CLOUDPODS_NATIVE_K8S_ACCEPTANCE_OK`。浏览器访问 `https://主节点IP/`，用户名为 `admin`，密码为 `/etc/cloudpods-native-k8s.env` 中设置的 `ADMIN_PASSWORD`。
+安装脚本应先输出 `CLOUDPODS_INSTALL_OK`。随后运行验收脚本；多节点时脚本会在每个节点各启动一个临时 Pod，完成 Pod IP 全互通测试并自动删除，最后必须输出 `CLOUDPODS_NATIVE_K8S_ACCEPTANCE_OK`。浏览器访问 `https://主节点IP/`，用户名为 `sysadmin`，密码为 `/etc/cloudpods-native-k8s.env` 中设置的 `ADMIN_PASSWORD`。
 
 ## 8. 添加 RISC-V 计算节点
 

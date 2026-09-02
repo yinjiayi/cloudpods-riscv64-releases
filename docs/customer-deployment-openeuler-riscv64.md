@@ -180,7 +180,7 @@ curl -kI https://127.0.0.1/
 - `onecloud` 命名空间 Pod 正常，DaemonSet 的期望数与就绪数一致。
 - Cloudpods Host 状态为 `running/online/enabled`。
 - `https://主节点IP/` 可以打开；访问 HTTP 80 会跳转到 HTTPS 443。
-- 使用用户名 `admin` 和 `config.yml` 中设置的管理员密码可以登录。
+- 使用用户名 `sysadmin` 和 `config.yml` 中设置的管理员密码可以登录。
 
 ## 7. 添加 RISC-V 计算节点
 
