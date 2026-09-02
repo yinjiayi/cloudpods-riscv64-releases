@@ -2,7 +2,7 @@
 
 验证日期：2026-09-02
 
-交付标签：`openruyi-native-k8s-v4.0.3-riscv64.4`
+交付标签：`openruyi-native-k8s-v4.0.3-riscv64.5`
 
 ## 验证环境
 
@@ -23,8 +23,9 @@
 - Cloudpods 核心 Pod 正常，七个 Host 相关 DaemonSet 均为 3/3；
 - 三台 Cloudpods Host 均为在线、启用状态；
 - Web 入口为 `https://10.213.6.187/`；
-- Web 管理员为 `sysadmin`，项目为 `system`、域为 `Default`；配置密码已通过
-  Keystone 真实认证；
+- Web 管理员为 `sysadmin`，项目为 `system`、域为 `Default`；账号属性
+  `allow_web_console=true`，配置密码已通过 HTTPS `/api/v1/auth/login` 真实认证，
+  返回 HTTP 200；
 - `60-verify.sh` 输出 `CLOUDPODS_NATIVE_K8S_ACCEPTANCE_OK`；
 - Host 与 Region 均来自 Cloudpods 提交 `6359b60d0b5cad7d337990ba966c7e2d106cabb8`，运行镜像为 `v4.0.3-riscv64.9`。
 

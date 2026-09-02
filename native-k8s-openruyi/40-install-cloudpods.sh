@@ -218,6 +218,29 @@ for _ in {1..240}; do
 done
 ${climc_ready}
 
+# The bootstrap administrator is API-enabled by default, but the upstream
+# identity default may prohibit it from signing in through Dashboard.  Keep
+# this idempotent so rerunning the installer also repairs existing clusters.
+web_console_enabled=false
+for _ in {1..60}; do
+    if kubectl --namespace onecloud exec deployment/default-climc -- \
+        climc user-update sysadmin --allow-web-console >/dev/null 2>&1 \
+        && kubectl --namespace onecloud exec deployment/default-climc -- \
+            climc user-show sysadmin 2>/dev/null \
+            | awk -F '|' '
+                $2 ~ /allow_web_console/ {
+                    gsub(/[[:space:]]/, "", $3)
+                    if ($3 == "true") found = 1
+                }
+                END { exit !found }
+            '; then
+        web_console_enabled=true
+        break
+    fi
+    sleep 5
+done
+${web_console_enabled}
+
 if ! kubectl --namespace onecloud exec deployment/default-climc -- \
     climc network-show "${HOST_NETWORK_NAME}" >/dev/null 2>&1; then
     kubectl --namespace onecloud exec deployment/default-climc -- \
