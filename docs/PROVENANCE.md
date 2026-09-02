@@ -10,6 +10,7 @@ checked against SHA-256 digests before a release is published.
 | Cloudpods operator | `yinjiayi/cloudpods-operator` commit `844387f47a91bc477b427449f98501b6b54eabc7`, based on upstream `v4.0.3`, with the configured etcd BusyBox image propagated to the local-storage helper pod |
 | Cloudpods build assets | immutable GHCR manifest `sha256:358c7d126ee4d79778f0271b0fd180fbf88f9db94fa6c652a89c6757a7aaa6a0`, containing the pinned RISC-V K3s release and the dashboard build with `riscv64` UI support |
 | Cloudpods and KubeServer runtime | Cloudpods commit `09dbdb795413a9274d63ec6253f328d249f6b5f2` and `yunionio/kubecomps` tag `v4.0.3`, commit `eb381ed38b587e2cabd081c69a0e6b0aa04a5360`, built inside pinned RISC-V containers under QEMU user-mode on x86_64; Cloudpods `.6` replaces only the verified host-deployer binary over the exact `.5` image, runtime packages and KubeServer's `lld20` `20.1.8-r0` use the measured Aliyun Alpine mirror, the three kubespray archives are recorded in `versions.env`, and LLD replaces GNU ld 2.44 because GNU ld crashes on the generated RISC-V relocation stream |
+| openRuyi 2026.08 Cloudpods runtime | `ghcr.io/yinjiayi/cloudpods:v4.0.3-riscv64.9`, OCI index digest `sha256:567699f802d793734721583b0b90603648eb0447c0557df41add768ff5bcd4f3`, RISC-V manifest `sha256:2678651ebd47b29766ab78ace5f46e570fc4b8271724423afdf89dc9aa656390`; Host and Region are both built from `yinjiayi/cloudpods` commit `6359b60d0b5cad7d337990ba966c7e2d106cabb8` |
 | Native-build source assets | exact Cloudpods, ocboot, operator, kubecomps, kubespray, and sdnagent commits exported once, published as release assets, mirrored through GitHub Pages, and pinned by SHA-256 so slow links can resume without changing source |
 | K3s root filesystem | `k3s-io/k3s-root` release `v0.13.0` |
 | CoreDNS | `coredns/coredns` tag `v1.11.1` |
@@ -20,6 +21,7 @@ checked against SHA-256 digests before a release is published.
 | klipper-lb | upstream source plus `k3s-io/klipper-lb` PR 56, commit `faaeca6` |
 | K3s build bases | architecture-specific upstream digests mirrored by a hosted runner to `ghcr.io/yinjiayi` before native RISC-V builds |
 | Cloudpods QEMU | signed `download.qemu.org` source `10.0.7`; the RPM bundles the openEuler glibc runtime needed inside the Alpine host pod, and any runtime-only repackage is pinned to a previously KVM-validated RPM SHA-256 before QMP and physical KVM revalidation |
+| openRuyi 2026.08 QEMU | openRuyi QEMU 11.0.1 RPM; Cloudpods uses versioned symlinks below `/usr/local/qemu-11.0.1`, while the missing `efi-virtio.rom` is supplied by the published fallback RPM |
 | Actions Runner QEMU | signed `download.qemu.org` source `11.1.0`, `x86_64-linux-user` only |
 | GitHub Actions Runner | official `actions/runner` x64 release `2.336.0`, SHA-256 pinned |
 | Runner .NET compatibility | deterministic Mono.Cecil `0.11.6` transform of the pinned Json.NET DLL plus the .NET 8 `ForceInterpretedInvoke` and `RuntimeFeature.IsDynamicCodeSupported=false` AppContext settings on Listener, Worker, and PluginHost; tiered compilation and dynamic PGO are disabled for the emulated control processes |

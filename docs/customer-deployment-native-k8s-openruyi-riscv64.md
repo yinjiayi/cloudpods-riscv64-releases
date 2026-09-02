@@ -1,50 +1,49 @@
-# Cloudpods RISC-V 原生 Kubernetes 部署手册（openRuyi）
+# Cloudpods RISC-V 客户部署手册（openRuyi）
 
-文档版本：1.0  
-发布日期：2026-08-26  
-适用系统：openRuyi Creek 2026.07 `riscv64`  
-部署方式：先安装原生 Kubernetes，再安装 Cloudpods；不使用 K3s、ocboot
+文档版本：2.0
+
+发布日期：2026-09-02
+
+适用系统：openRuyi Creek 2026.08 `riscv64`
+
+部署方式：openRuyi 原生 Kubernetes + Cloudpods，不使用 K3s、ocboot
 
 ## 1. 交付版本
 
-| 组件 | 固定版本 |
-| --- | --- |
-| openRuyi | Creek 2026.07，内核 7.1.4-545.1.or |
-| Kubernetes | v1.36.4 |
-| containerd | v2.3.4 |
-| etcd | v3.7.1 |
-| cri-tools | v1.36.0 |
-| CNI plugins | v1.9.1 |
-| QEMU | v11.1.0，RISC-V 原生构建，支持 KVM/RVA23 |
-| Cloudpods | v4.0.3-riscv64.8 |
-| Dashboard | v4.0.3-riscv64-ui2 |
-| Cloudpods Operator | v4.0.3-riscv64.4 |
+安装脚本优先使用 openRuyi 软件仓库；仅在仓库没有对应软件包时，下载并校验官方 RISC-V 发行物。
 
-交付源码固定使用标签 `openruyi-native-k8s-v4.0.3-riscv64.2`。脚本下载的二进制均校验 SHA-256。
+| 组件 | 本次验证版本 | 来源 |
+| --- | --- | --- |
+| openRuyi | Creek 2026.08，内核 7.2.0-3.1_551.1.or | openRuyi |
+| Kubernetes | v1.35.5 | openRuyi RPM |
+| containerd | v2.3.3 | openRuyi RPM |
+| etcd | v3.6.6 | openRuyi RPM |
+| cri-tools | v1.36.0 | 官方发行物 |
+| CNI plugins | v1.9.1 | 官方发行物 |
+| QEMU | v11.0.1 | openRuyi RPM |
+| Cloudpods | v4.0.3-riscv64.9 | GHCR |
+| Dashboard | v4.0.3-riscv64-ui2 | GHCR |
+| Cloudpods Operator | v4.0.3-riscv64.4 | GHCR |
+
+交付源码标签：`openruyi-native-k8s-v4.0.3-riscv64.3`。
 
 ## 2. 部署规划
 
-示例使用一个主节点和一个计算节点。主节点同时作为第一台计算宿主。
+以下三节点地址是已经验证的现场示例。其他环境部署时，替换为客户实际地址、网卡、网关、DNS 和 NTP。
 
-| 项目 | 主节点示例 | 计算节点示例 |
-| --- | --- | --- |
-| hostname | `cloudpods-openruyi-master01` | `cloudpods-openruyi-compute01` |
-| 管理 IP | `192.168.50.10` | `192.168.50.11` |
-| 节点 PodCIDR | `10.244.0.0/24` | `10.244.1.0/24` |
-| 管理网卡 | `eth0` | `eth0` |
+| 角色 | hostname | 管理 IP | PodCIDR |
+| --- | --- | --- | --- |
+| 主节点/计算节点 | `cloudpods-openruyi-master01` | `10.213.6.187` | `10.244.0.0/24` |
+| 计算节点 1 | `cloudpods-openruyi-compute01` | `10.213.6.183` | `10.244.1.0/24` |
+| 计算节点 2 | `cloudpods-openruyi-compute02` | `10.213.6.188` | `10.244.2.0/24` |
 
-全局参数：PodCIDR `10.244.0.0/16`，ServiceCIDR `10.96.0.0/12`，Cloudpods Host 管理池示例为 `192.168.50.10-192.168.50.29/24`。
+集群 PodCIDR 为 `10.244.0.0/16`，ServiceCIDR 为 `10.96.0.0/12`。现场示例使用：
 
-部署前必须确认：
+- Host 管理池：`10.213.6.180-10.213.6.199/20`，网关 `10.213.0.1`；
+- 虚机地址池：`10.213.15.230-10.213.15.249/20`，网关 `10.213.0.1`；
+- NTP：`10.213.0.1`；DNS：`10.200.0.5 10.200.0.4`。
 
-- 每台服务器建议至少 16 核、32 GiB 内存、200 GiB 可用磁盘；存在 `/dev/kvm` 和 `/dev/net/tun`。
-- hostname、管理 IP 固定且唯一，所有节点二层互通，DNS、时间同步和互联网访问正常。
-- PodCIDR、ServiceCIDR 不与现场网络重叠。
-- Host 管理池覆盖全部宿主 IP，并从现场 DHCP 池排除。
-- 虚拟机地址池另行规划；如使用现场 DHCP，不要创建重叠的 Cloudpods 静态地址池。
-- 交换机端口允许虚拟机使用多个 MAC 地址。
-
-节点间放通 TCP 6443、2379-2380、10250、10256、8885、32241-32242，UDP 6081；客户端到主节点放通 TCP 80、443。
+地址池必须从 DHCP 可分配范围排除。交换机端口必须允许多个虚机 MAC 地址。节点间放通 TCP 6443、2379-2380、10250、10256、8885、32241-32242 和 UDP 6081；客户端到主节点放通 TCP 80、443。
 
 ## 3. 所有节点预检查
 
@@ -55,6 +54,8 @@ set -euo pipefail
 test "$(uname -m)" = riscv64
 grep -Eq '^ID="?openruyi"?$' /etc/os-release
 grep -Eq '^VERSION_ID="?Creek"?$' /etc/os-release
+modprobe kvm
+modprobe tun
 test -c /dev/kvm
 test -c /dev/net/tun
 ! systemctl is-active --quiet k3s
@@ -64,63 +65,52 @@ ip -brief address
 df -h /
 ```
 
-任一检查失败时先修复，不要继续安装。
+建议每台服务器不少于 16 核、32 GiB 内存、200 GiB 可用磁盘。PodCIDR、ServiceCIDR 和现场网络不得重叠。任一检查失败时先修复，不要继续安装。
 
 ## 4. 安装主节点
 
-### 4.1 获取交付文件
+获取交付文件并生成配置：
 
 ```bash
 dnf install -y git openssl
 cd /root
-git clone --depth 1 --branch openruyi-native-k8s-v4.0.3-riscv64.2 \
+git clone --depth 1 --branch openruyi-native-k8s-v4.0.3-riscv64.3 \
   https://github.com/yinjiayi/cloudpods-riscv64-releases.git
-cd /root/cloudpods-riscv64-releases
+cd cloudpods-riscv64-releases
 cp native-k8s-openruyi/install.env.example \
   /etc/cloudpods-openruyi-native-k8s.env
 chmod 600 /etc/cloudpods-openruyi-native-k8s.env
 ```
 
-编辑 `/etc/cloudpods-openruyi-native-k8s.env`。主节点示例：
+编辑 `/etc/cloudpods-openruyi-native-k8s.env`。现场主节点配置如下，密码值由客户自行生成，不得照抄：
 
 ```bash
 NODE_NAME=cloudpods-openruyi-master01
-NODE_IP=192.168.50.10
+NODE_IP=10.213.6.187
 POD_CIDR=10.244.0.0/16
 POD_NODE_CIDR=10.244.0.0/24
 SERVICE_CIDR=10.96.0.0/12
 CLUSTER_DNS=10.96.0.10
 CLUSTER_NAME=cloudpods-openruyi
 GHCR_NAMESPACE=ghcr.io/yinjiayi
-NTP_POOLS=pool.ntp.org
-NTP_SERVERS=
+NTP_POOLS=
+NTP_SERVERS=10.213.0.1
+DNS_SERVERS="10.200.0.5 10.200.0.4"
 ARTIFACT_BASE_URL=https://github.com/yinjiayi/cloudpods-riscv64-releases/releases/download/openruyi-native-k8s-v4.0.3-riscv64.1
-CONTROL_PLANE_IP=192.168.50.10
-HOST_NETWORK_INTERFACE=eth0
+CONTROL_PLANE_IP=10.213.6.187
+HOST_NETWORK_INTERFACE=eth1
 HOST_NETWORK_NAME=cloudpods-host-mgmt
-HOST_NETWORK_START=192.168.50.10
-HOST_NETWORK_END=192.168.50.29
-HOST_NETWORK_PREFIX=24
-HOST_NETWORK_GATEWAY=192.168.50.1
+HOST_NETWORK_START=10.213.6.180
+HOST_NETWORK_END=10.213.6.199
+HOST_NETWORK_PREFIX=20
+HOST_NETWORK_GATEWAY=10.213.0.1
 HOST_DISK_PATH=/opt/cloud/workspace/disks
 MYSQL_PASSWORD=替换为openssl_rand_hex_24生成的值
 ADMIN_PASSWORD=替换为openssl_rand_hex_24生成的值
 LAB_TCG_FALLBACK=false
 ```
 
-`NTP_POOLS` 和 `NTP_SERVERS` 均可填写一个或多个以空格分隔的地址。生产
-环境应将 `NTP_POOLS` 留空，并在 `NTP_SERVERS` 填写内网 NTP；脚本会在
-containerd 和 kubelet 启动前等待时钟同步，避免节点重启后的时间回退造成
-容器状态异常。
-
-密码仅允许字母、数字、点、下划线和连字符，长度为 16-128。可分别执行 `openssl rand -hex 24` 生成。确认管理网卡承载管理 IP：
-
-```bash
-source /etc/cloudpods-openruyi-native-k8s.env
-ip -4 address show dev "$HOST_NETWORK_INTERFACE" | grep -F "$NODE_IP/"
-```
-
-### 4.2 安装并验收 Kubernetes
+分别执行两次 `openssl rand -hex 24` 生成 MySQL 和 admin 密码。确认 `HOST_NETWORK_INTERFACE` 是承载管理 IP 的物理网卡后执行：
 
 ```bash
 cd /root/cloudpods-riscv64-releases/native-k8s-openruyi
@@ -128,43 +118,30 @@ chmod +x ./*.sh qemu-rva23-openruyi-lab/*.sh
 ./00-install-packages.sh
 ./10-runtime.sh
 ./20-control-plane.sh
-
-kubectl get --raw=/readyz
-kubectl get nodes -o wide
-kubectl -n kube-system get pods -o wide
-systemctl is-active etcd kube-apiserver kube-controller-manager \
-  kube-scheduler kubelet kube-proxy containerd
-```
-
-必须满足：API 输出 `ok`，主节点为 `Ready/riscv64`，两个 CoreDNS Pod 为 `Running`，`kube-proxy` 日志显示使用 nftables。openRuyi 当前内核缺少旧 iptables REDIRECT 兼容项，脚本仅对该项使用 kubeadm `SystemVerification` 例外，并使用持久化原生 nftables 规则替代；不要改回 iptables 模式。
-
-### 4.3 安装 Cloudpods
-
-```bash
 ./30-cloudpods-host.sh
 ./35-pull-cloudpods-images.sh
 ./40-install-cloudpods.sh
 ```
 
-`30-cloudpods-host.sh` 会安装 QEMU 11.1.0 并执行真实 `/dev/kvm` 内核启动测试；`40-install-cloudpods.sh` 会部署控制面、创建 Host 管理网络并启用首台 Host。启用 Host 时，管理 IP 会从物理网卡迁移到 `br0`，SSH 可能短暂断开；等待约一分钟后仍用原 IP 登录。
-
-脚本最终必须输出 `CLOUDPODS_HOST_PREREQUISITES_OK`、`CLOUDPODS_IMAGES_OK` 和 `CLOUDPODS_INSTALL_OK`。
+脚本启用 Host 时会把管理 IP 迁移到 OVS `br0`，SSH 可能短暂断开，恢复后仍使用原管理 IP 登录。
 
 ## 5. 添加计算节点
 
-### 5.1 准备节点
-
-在计算节点执行第 3 节预检查，并按第 4.1 节获取同一交付标签。配置文件中至少修改：
+每台计算节点获取相同交付标签和配置文件。配置与主节点保持一致，只修改 `NODE_NAME`、`NODE_IP` 和 `POD_NODE_CIDR`；例如：
 
 ```bash
+# 10.213.6.183
 NODE_NAME=cloudpods-openruyi-compute01
-NODE_IP=192.168.50.11
+NODE_IP=10.213.6.183
 POD_NODE_CIDR=10.244.1.0/24
-CONTROL_PLANE_IP=192.168.50.10
-HOST_NETWORK_INTERFACE=eth0
+
+# 10.213.6.188
+NODE_NAME=cloudpods-openruyi-compute02
+NODE_IP=10.213.6.188
+POD_NODE_CIDR=10.244.2.0/24
 ```
 
-其余集群、Host 管理池和密码参数与主节点一致，然后执行：
+每台计算节点先执行：
 
 ```bash
 cd /root/cloudpods-riscv64-releases/native-k8s-openruyi
@@ -173,41 +150,37 @@ chmod +x ./*.sh
 ./10-runtime.sh
 ```
 
-### 5.2 加入 Kubernetes
-
-在主节点执行：
+主节点为每台计算节点生成有效期两小时的加入参数：
 
 ```bash
 JOIN_COMMAND=$(kubeadm token create --ttl 2h --print-join-command)
 JOIN_TOKEN=$(awk '{for(i=1;i<=NF;i++)if($i=="--token")print $(i+1)}' <<<"$JOIN_COMMAND")
 JOIN_HASH=$(awk '{for(i=1;i<=NF;i++)if($i=="--discovery-token-ca-cert-hash")print $(i+1)}' <<<"$JOIN_COMMAND")
 printf './25-worker-join.sh %q %q\n' "$JOIN_TOKEN" "$JOIN_HASH"
-scp /etc/kubernetes/kube-proxy.conf \
-  root@192.168.50.11:/etc/kubernetes/kube-proxy.conf
 ```
 
-在计算节点执行主节点刚打印的完整命令，参数不要照抄示例：
+将主节点 `/etc/kubernetes/kube-proxy.conf` 复制到计算节点，在该节点运行上一步打印的 `25-worker-join.sh` 命令。然后配置每台节点到其余节点 Pod `/24` 的静态路由：
 
 ```bash
-cd /root/cloudpods-riscv64-releases/native-k8s-openruyi
-./25-worker-join.sh 实际TOKEN sha256:实际CA哈希
+# 主节点
+./50-pod-routes.sh \
+  10.244.1.0/24=10.213.6.183 \
+  10.244.2.0/24=10.213.6.188
+
+# 计算节点 1
+./50-pod-routes.sh \
+  10.244.0.0/24=10.213.6.187 \
+  10.244.2.0/24=10.213.6.188
+
+# 计算节点 2
+./50-pod-routes.sh \
+  10.244.0.0/24=10.213.6.187 \
+  10.244.1.0/24=10.213.6.183
 ```
 
-脚本必须输出 `OPENRUYI_NATIVE_K8S_WORKER_OK`。在主节点执行 `kubectl get nodes -o wide`，确认两个节点均为 `Ready/riscv64`。
-
-### 5.3 配置 Pod 路由和计算服务
-
-主节点执行：
+每台计算节点安装 Cloudpods Host 依赖：
 
 ```bash
-./50-pod-routes.sh 10.244.1.0/24=192.168.50.11
-```
-
-计算节点执行：
-
-```bash
-cd /root/cloudpods-riscv64-releases/native-k8s-openruyi
-./50-pod-routes.sh 10.244.0.0/24=192.168.50.10
 ./30-cloudpods-host.sh
 ./35-pull-cloudpods-images.sh
 ```
@@ -215,58 +188,36 @@ cd /root/cloudpods-riscv64-releases/native-k8s-openruyi
 主节点启用计算 Host：
 
 ```bash
-kubectl label node cloudpods-openruyi-compute01 \
-  onecloud.yunion.io/host=enable --overwrite
-kubectl -n onecloud get pods -o wide --watch
+kubectl label node cloudpods-openruyi-compute01 onecloud.yunion.io/host=enable --overwrite
+kubectl label node cloudpods-openruyi-compute02 onecloud.yunion.io/host=enable --overwrite
+kubectl get nodes -o wide
+kubectl -n onecloud get pods -o wide
 ```
 
-计算节点 IP 迁移到 `br0` 后，在计算节点执行：
+## 6. 验收
 
-```bash
-systemctl restart cloudpods-native-k8s-routes.service
-ip route show 10.244.0.0/24
-```
-
-三台及以上节点时，每台节点都要配置到其余所有节点 Pod `/24` 的路由。
-
-## 6. 最终验收
-
-在主节点执行：
+主节点执行：
 
 ```bash
 cd /root/cloudpods-riscv64-releases/native-k8s-openruyi
 ./60-verify.sh
 ```
 
-必须输出 `CLOUDPODS_NATIVE_K8S_ACCEPTANCE_OK`。浏览器访问 `https://主节点IP/`，账号 `admin`，密码为配置文件中的 `ADMIN_PASSWORD`。
+必须输出 `CLOUDPODS_NATIVE_K8S_ACCEPTANCE_OK`，三台节点均为 `Ready/riscv64`，三台 Cloudpods Host 均为在线且启用。浏览器访问 `https://10.213.6.187/`，账号为 `admin`，密码是配置文件中的 `ADMIN_PASSWORD`。
 
-再完成一台真实 RISC-V 虚机验收：
+最后创建一台真实 RISC-V 虚机并完成以下验收：
 
-1. 上传 openRuyi Creek 2026.07 RISC-V QCOW2 镜像，架构选择 `riscv64`。
-2. 创建 2 vCPU、4 GiB 内存、至少 45 GiB 本地系统盘的临时虚机。
-3. 网络使用独立静态地址池，或使用现场已确认可分配的 DHCP 网络。
-4. 确认虚机状态为运行、UEFI 控制台出现 openRuyi 登录提示。
-5. 确认虚机获得地址，管理网能够 ping 和 SSH 到该地址。
-6. 在虚机内执行一次 `reboot`，确认 SSH 恢复且系统仍为 `riscv64/openRuyi/KVM`。
-7. 依次重启计算节点和主节点，确认 Kubernetes、Cloudpods 和两台 Host 恢复；
-   计算节点正常关机时 Cloudpods 会关闭其上的虚机，节点恢复后从 Cloudpods
-   重新启动测试虚机，并再次确认 SSH 可用。
+1. 上传 openRuyi Creek 2026.08 RISC-V QCOW2 镜像，架构选择 `riscv64`、启动方式选择 UEFI。
+2. 创建 2 vCPU、4 GiB 内存、至少 25 GiB 本地系统盘的临时虚机。
+3. 选择已确认不与 DHCP 冲突的虚机地址池，确认管理网可 ping 和 SSH 到虚机。
+4. 虚机内确认 `uname -m` 为 `riscv64`、`systemd-detect-virt` 为 `kvm`，并执行一次重启复测 SSH。
+5. 依次重启计算节点，确认 `/dev/kvm`、Kubernetes Node、Cloudpods Host、`br0` 路由和 DNS 自动恢复。
 
-openRuyi 官方云镜像首次启动会用 `systemd-repart` 扩展系统盘。确认根分区已扩展
-到预期大小后，如果后续启动仅因“无剩余空间”导致该服务失败，可在虚机内执行：
-
-```bash
-systemctl mask systemd-repart.service
-systemctl reset-failed
-```
-
-执行前必须先用 `lsblk` 和 `df -h /` 确认根分区已成功扩展，不可用于尚未扩容的镜像。
-
-只有上述项目全部通过，才视为交付完成。
+openRuyi 2026.08 云镜像默认不带 cloud-init。需要自动注入 SSH 密钥时，应先制作包含 cloud-init 的标准镜像；否则通过镜像离线注入密钥。不要依赖明文默认密码。
 
 ## 7. 故障信息收集
 
-失败时不要清空数据库或重装，先收集：
+失败时不要清库或重装，先收集：
 
 ```bash
 systemctl status etcd kube-apiserver kube-controller-manager \
@@ -277,9 +228,12 @@ kubectl get nodes -o wide
 kubectl -n kube-system get pods -o wide
 kubectl -n onecloud get pods -o wide
 kubectl -n onecloud get events --sort-by=.lastTimestamp
+cat /etc/cloudpods-openruyi-component-sources.env
+lsmod | grep '^kvm'
+ls -l /dev/kvm /dev/net/tun
 ovs-vsctl show
 ip -brief address
-nft list ruleset
+resolvectl status br0
 ```
 
 将失败脚本最后 200 行输出与上述结果一并提供给技术支持。

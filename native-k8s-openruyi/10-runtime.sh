@@ -217,6 +217,17 @@ StartLimitInterval=0
 WantedBy=multi-user.target
 EOF
 
+# The openRuyi kubernetes RPM ships a vendor drop-in that replaces ExecStart.
+# Override it at the administrator level so this deployment consistently uses
+# the generated kubelet configuration, including the non-stub resolver file.
+install -d -m 0755 /etc/systemd/system/kubelet.service.d
+rm -f /etc/systemd/system/kubelet.service.d/00-cloudpods-openruyi.conf
+cat >/etc/systemd/system/kubelet.service.d/99-cloudpods-openruyi.conf <<EOF
+[Service]
+ExecStart=
+ExecStart=${kubelet_bin} --config=/var/lib/kubelet/config.yaml \$KUBELET_EXTRA_ARGS
+EOF
+
 cat >/etc/systemd/system/kube-proxy.service <<EOF
 [Unit]
 Description=Kubernetes Kube Proxy

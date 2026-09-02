@@ -10,6 +10,7 @@ source "${config_file}"
 : "${HOST_DISK_PATH:=/opt/cloud/workspace/disks}"
 : "${HOST_NETWORK_INTERFACE:?Set HOST_NETWORK_INTERFACE in ${config_file}}"
 : "${NODE_IP:?Set NODE_IP in ${config_file}}"
+: "${DNS_SERVERS:=}"
 qemu_version=11.0.1
 
 if [[ ${EUID} -ne 0 ]]; then
@@ -37,6 +38,8 @@ curl -fsSL \
 dnf install -y \
     cloudpods-executor \
     cloudpods-riscv-firmware \
+    cyrus-sasl \
+    dtc \
     glib \
     libaio \
     libcap-ng \
@@ -44,11 +47,14 @@ dnf install -y \
     liburing \
     mariadb \
     nettle \
+    numactl \
     openvswitch \
     pixman \
     qemu \
     qemu-system \
-    qemu-tools
+    qemu-tools \
+    snappy \
+    lzo
 
 # Remove the compatibility shim installed by early preview revisions.  The
 # published Cloudpods image discovers containerd's image filesystem directly.
@@ -63,6 +69,32 @@ qemu_img_bin=$(command -v qemu-img)
 qemu_nbd_bin=$(command -v qemu-nbd)
 rpm -q qemu qemu-system qemu-tools
 rpm -qf "${qemu_bin}" "${qemu_img_bin}" "${qemu_nbd_bin}"
+
+# Cloudpods resolves a requested QEMU version from a versioned prefix.  Keep
+# the files owned by openRuyi and expose only symlinks from that prefix.  This
+# also wins over the older compatibility QEMU pulled by cloudpods-executor.
+qemu_prefix=/usr/local/qemu-${qemu_version}
+install -d -m 0755 "${qemu_prefix}/bin"
+ln -sfn "${qemu_bin}" "${qemu_prefix}/bin/qemu-system-riscv64"
+ln -sfn "${qemu_img_bin}" "${qemu_prefix}/bin/qemu-img"
+ln -sfn "${qemu_nbd_bin}" "${qemu_prefix}/bin/qemu-nbd"
+qemu_bin=${qemu_prefix}/bin/qemu-system-riscv64
+
+qemu_firmware_source=openruyi-rpm
+if [[ ! -s /usr/share/qemu/efi-virtio.rom ]]; then
+    fallback_rom=$(rpm -ql qemu-riscv-cloudpods 2>/dev/null \
+        | grep '/share/qemu/efi-virtio\.rom$' | head -n 1 || true)
+    if [[ ! -s ${fallback_rom} ]]; then
+        echo "openRuyi QEMU is missing efi-virtio.rom and no fallback ROM is installed" >&2
+        exit 1
+    fi
+    install -d -m 0755 /usr/share/qemu
+    for rom in "$(dirname -- "${fallback_rom}")"/*.rom; do
+        ln -sfn "${rom}" "/usr/share/qemu/$(basename -- "${rom}")"
+    done
+    qemu_firmware_source=cloudpods-fallback-rpm
+fi
+test -s /usr/share/qemu/efi-virtio.rom
 
 # mysql/openvswitch dependencies can install SELinux policy after
 # 10-runtime.sh has already run.  Keep the supported permissive setting both
@@ -133,6 +165,48 @@ EOF
 
 systemctl daemon-reload
 systemctl enable --now cloudpods-brlocal-address.service
+
+if [[ -z ${DNS_SERVERS} ]]; then
+    DNS_SERVERS=$(awk '/^nameserver / && $2 !~ /^127\./ { print $2 }' \
+        /run/systemd/resolve/resolv.conf /etc/resolv.conf 2>/dev/null \
+        | sort -u | xargs)
+fi
+if [[ -n ${DNS_SERVERS} ]] && command -v resolvectl >/dev/null; then
+    printf '%s\n' ${DNS_SERVERS} >/etc/cloudpods-openruyi-dns-servers
+    chmod 0644 /etc/cloudpods-openruyi-dns-servers
+    cat >/usr/local/sbin/cloudpods-br0-dns <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+for _ in {1..120}; do
+    ip link show dev br0 >/dev/null 2>&1 && break
+    sleep 1
+done
+ip link show dev br0 >/dev/null
+mapfile -t dns_servers </etc/cloudpods-openruyi-dns-servers
+resolvectl dns br0 "\${dns_servers[@]}"
+resolvectl default-route br0 yes
+resolvectl default-route ${HOST_NETWORK_INTERFACE} no || true
+resolvectl flush-caches
+EOF
+    chmod 0755 /usr/local/sbin/cloudpods-br0-dns
+    cat >/etc/systemd/system/cloudpods-br0-dns.service <<'EOF'
+[Unit]
+Description=Move DNS routing to the Cloudpods br0 management bridge
+After=network-online.target systemd-resolved.service
+Wants=network-online.target systemd-resolved.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudpods-br0-dns
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    systemctl daemon-reload
+    systemctl enable --now cloudpods-br0-dns.service
+fi
+
 systemctl enable cloudpods-executor
 systemctl restart cloudpods-executor
 
@@ -150,6 +224,7 @@ sed -i '/^QEMU_/d' /etc/cloudpods-openruyi-component-sources.env
 cat >>/etc/cloudpods-openruyi-component-sources.env <<EOF
 QEMU_SOURCE=openruyi-rpm
 QEMU_VERSION=${qemu_version}
+QEMU_FIRMWARE_SOURCE=${qemu_firmware_source}
 EOF
 
 # Cloudpods configures a password-protected VNC endpoint for every guest.  A
