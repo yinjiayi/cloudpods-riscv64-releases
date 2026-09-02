@@ -99,4 +99,30 @@ kubectl --namespace onecloud exec deployment/default-climc -- \
     climc --os-username sysadmin --os-password "${ADMIN_PASSWORD}" \
     --os-project-name system --os-project-domain Default \
     --os-domain-name Default user-show sysadmin >/dev/null
+
+kubectl --namespace onecloud exec deployment/default-climc -- \
+    climc user-show sysadmin \
+    | awk -F '|' '
+        $2 ~ /allow_web_console/ {
+            gsub(/[[:space:]]/, "", $3)
+            if ($3 == "true") found = 1
+        }
+        END { exit !found }
+    '
+
+# Dashboard Base64-encodes the password before posting the login request.
+# Feed the JSON body over stdin so the plaintext password is not exposed in
+# curl's process arguments or acceptance output.
+web_login_status=$(
+    {
+        printf '{"username":"sysadmin","password":"'
+        printf %s "${ADMIN_PASSWORD}" | base64 | tr -d '\n'
+        printf '","domain":"Default"}'
+    } \
+    | curl --silent --show-error --insecure \
+        --output /dev/null --write-out '%{http_code}' \
+        --header 'Content-Type: application/json' \
+        --data-binary @- "https://${NODE_IP}/api/v1/auth/login"
+)
+test "${web_login_status}" = 200
 echo CLOUDPODS_NATIVE_K8S_ACCEPTANCE_OK
